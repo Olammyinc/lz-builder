@@ -3,7 +3,7 @@ import { lzFetch } from '../api';
 
 export default function Toolbar( { state, dispatch, data, showNotice } ) {
 	const handleSave = useCallback( () => {
-		lzFetch( 'save_draft', { data: state.layout } ).then( ( r ) => {
+		lzFetch( 'save_draft', {} ).then( ( r ) => {
 			if ( r && r.success ) {
 				showNotice( 'Draft saved!', 'success' );
 				dispatch( { type: 'SET_UNSAVED', value: false } );
@@ -14,10 +14,10 @@ export default function Toolbar( { state, dispatch, data, showNotice } ) {
 				);
 			}
 		} );
-	}, [ state.layout, showNotice, dispatch ] );
+	}, [ showNotice, dispatch ] );
 
 	const handlePublish = useCallback( () => {
-		lzFetch( 'save_layout', { data: state.layout } ).then( ( r ) => {
+		lzFetch( 'save_layout', {} ).then( ( r ) => {
 			if ( r && r.success ) {
 				showNotice( 'Page published!', 'success' );
 				dispatch( { type: 'SET_UNSAVED', value: false } );
@@ -28,7 +28,7 @@ export default function Toolbar( { state, dispatch, data, showNotice } ) {
 				);
 			}
 		} );
-	}, [ state.layout, showNotice, dispatch ] );
+	}, [ showNotice, dispatch ] );
 
 	return createElement( 'div', { className: 'lz-toolbar' },
 		createElement( 'div', { className: 'lz-toolbar-left' },

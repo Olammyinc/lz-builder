@@ -1,13 +1,11 @@
 import { createElement, useCallback, useState } from '@wordpress/element';
 import { getPreviewUrl, lzFetch } from '../api';
 
-export default function Canvas( { data, updatePreview, showNotice, iframeRef, dispatch, refreshLayout } ) {
-	const [ dragOver, setDragOver ] = useState( false );
+export default function Canvas( { data, updatePreview, showNotice, iframeRef, dispatch, refreshLayout, isDragging } ) {
 	const previewUrl = getPreviewUrl();
 
 	const handleDrop = useCallback( ( e ) => {
 		e.preventDefault();
-		setDragOver( false );
 		const slug = e.dataTransfer.getData( 'text/plain' );
 		if ( slug ) {
 			lzFetch( 'add_module', { module: slug } ).then( ( r ) => {
@@ -31,25 +29,13 @@ export default function Canvas( { data, updatePreview, showNotice, iframeRef, di
 		e.dataTransfer.dropEffect = 'copy';
 	}, [] );
 
-	const handleDragEnter = useCallback( () => {
-		setDragOver( true );
-	}, [] );
-
-	const handleDragLeave = useCallback( ( e ) => {
-		if ( ! e.currentTarget.contains( e.relatedTarget ) ) {
-			setDragOver( false );
-		}
-	}, [] );
-
 	return createElement( 'div', {
-		className: 'lz-builder-canvas' + ( dragOver ? ' lz-builder-canvas--drag' : '' ),
+		className: 'lz-builder-canvas',
 		onDrop: handleDrop,
 		onDragOver: handleDragOver,
-		onDragEnter: handleDragEnter,
-		onDragLeave: handleDragLeave,
 	},
 		createElement( 'div', {
-			className: 'lz-drop-zone' + ( dragOver ? ' lz-drop-zone--active' : '' ),
+			className: 'lz-drop-zone' + ( isDragging ? ' lz-drop-zone--active' : '' ),
 		},
 			createElement( 'div', { className: 'lz-drop-zone-text' }, 'Drop module here' ),
 		),
@@ -57,7 +43,9 @@ export default function Canvas( { data, updatePreview, showNotice, iframeRef, di
 			ref: iframeRef,
 			id: 'lz-builder-iframe',
 			className: 'lz-builder-frame',
+			title: 'Lz Builder Preview',
 			src: previewUrl,
+			style: isDragging ? { pointerEvents: 'none' } : undefined,
 		} ),
 	);
 }

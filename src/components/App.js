@@ -1,4 +1,4 @@
-import { createElement, useReducer, useCallback, useEffect, useRef } from '@wordpress/element';
+import { createElement, useReducer, useCallback, useEffect, useRef, useState } from '@wordpress/element';
 import { reducer, initialState } from '../store';
 import { lzFetch } from '../api';
 import Toolbar from './Toolbar';
@@ -8,7 +8,9 @@ import Notices from './Notices';
 
 export default function App( { data } ) {
 	const [ state, dispatch ] = useReducer( reducer, initialState );
+	const [ isDragging, setIsDragging ] = useState( false );
 	const iframeRef = useRef( null );
+	const dragCounter = useRef( 0 );
 
 	const showNotice = useCallback( ( message, type = 'success', textOnly = false ) => {
 		const id = Date.now() + ( Math.random() * 1000 );
@@ -29,11 +31,32 @@ export default function App( { data } ) {
 	}, [ postToIframe ] );
 
 	const refreshLayout = useCallback( () => {
-		lzFetch( 'get_layout', { status: 'published' } ).then( ( r ) => {
+		lzFetch( 'get_layout', { status: 'draft' } ).then( ( r ) => {
 			const layout = ( r && r.success && r.data && r.data.data ) || [];
 			dispatch( { type: 'SET_LAYOUT', layout } );
 			dispatch( { type: 'SET_LAYOUT_LOADED' } );
 		} );
+	}, [] );
+
+	// Global drag-state tracking so the iframe drop overlay works reliably
+	// across Chrome and Firefox.
+	useEffect( () => {
+		function handleDragStart() {
+			dragCounter.current += 1;
+			setIsDragging( true );
+		}
+		function handleDragEnd() {
+			dragCounter.current = Math.max( 0, dragCounter.current - 1 );
+			if ( dragCounter.current === 0 ) {
+				setIsDragging( false );
+			}
+		}
+		document.addEventListener( 'dragstart', handleDragStart );
+		document.addEventListener( 'dragend', handleDragEnd );
+		return () => {
+			document.removeEventListener( 'dragstart', handleDragStart );
+			document.removeEventListener( 'dragend', handleDragEnd );
+		};
 	}, [] );
 
 	useEffect( () => {
@@ -57,7 +80,7 @@ export default function App( { data } ) {
 		createElement( Toolbar, { state, dispatch, data, showNotice } ),
 		createElement( 'div', { className: 'lz-builder-workspace' },
 			createElement( Sidebar, { state, dispatch, data, showNotice, postToIframe, updatePreview, refreshLayout } ),
-			createElement( Canvas, { data, updatePreview, showNotice, iframeRef, dispatch, refreshLayout } ),
+			createElement( Canvas, { data, updatePreview, showNotice, iframeRef, dispatch, refreshLayout, isDragging } ),
 		),
 	);
 }

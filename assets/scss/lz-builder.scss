@@ -330,15 +330,7 @@ body.lz-builder-active {
     font-weight: 600;
 }
 
-/* Node overlay */
-.lz-node-overlay {
-    pointer-events: none;
-    position: absolute;
-    z-index: 999;
-    border: 2px solid var(--lz-primary);
-    border-radius: 4px;
-    display: none;
-}
+/* Node overlay — styled inline in builder-preview.php */
 
 /* Settings Form */
 .lz-settings-form {

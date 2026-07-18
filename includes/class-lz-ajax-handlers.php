@@ -37,7 +37,7 @@ class LZ_AJAX_Handlers {
         self::$rest_routes_registered = true;
 
         $routes = [
-            'save-layout'             => ['methods' => 'POST', 'callback' => 'save_layout_rest'],
+            'publish'                 => ['methods' => 'POST', 'callback' => 'publish_rest'],
             'save-draft'              => ['methods' => 'POST', 'callback' => 'save_draft_rest'],
             'get-layout'              => ['methods' => 'GET',  'callback' => 'get_layout_rest'],
             'add-row'                 => ['methods' => 'POST', 'callback' => 'add_row_rest'],
@@ -76,6 +76,10 @@ class LZ_AJAX_Handlers {
         if (!self::verify_nonce()) {
             wp_send_json_error(['message' => __('Invalid nonce.', 'lz-builder')]);
         }
+        $post_id = self::get_post_id_from_request();
+        if ($post_id && !current_user_can('edit_post', $post_id)) {
+            wp_send_json_error(['message' => __('Permission denied for this post.', 'lz-builder')]);
+        }
         if (!current_user_can('edit_posts')) {
             wp_send_json_error(['message' => __('Permission denied.', 'lz-builder')]);
         }
@@ -85,55 +89,62 @@ class LZ_AJAX_Handlers {
         return isset($_REQUEST['post_id']) ? (int) $_REQUEST['post_id'] : 0;
     }
 
+    // ---- Save / Publish / Draft ----
+
     public static function save_layout(): void {
         self::check_permissions();
         $post_id = self::get_post_id_from_request();
-        $data = isset($_POST['data']) ? json_decode(wp_unslash($_POST['data']), true) : [];
-        if (empty($data) || !is_array($data)) {
-            wp_send_json_error(['message' => __('Invalid data.', 'lz-builder')]);
-        }
+
+        // Publish: promote draft data to published (server-side; no client payload needed).
+        $draft_data = LZ_Page_Data::get_layout_data($post_id, 'draft');
+        $data       = is_array($draft_data) ? $draft_data : [];
+
         if (class_exists('LzBuilder\LZ_Subscription_Gate')) {
             $data = LZ_Subscription_Gate::filter_available_modules($data);
         }
+
         LZ_Page_Data::update_layout_data($post_id, $data, 'published');
         LZ_CSS_Accumulator::clear();
-        wp_send_json_success(['message' => __('Layout saved.', 'lz-builder')]);
+        wp_send_json_success(['message' => __('Layout published.', 'lz-builder')]);
     }
 
     public static function save_draft(): void {
         self::check_permissions();
         $post_id = self::get_post_id_from_request();
-        $data = isset($_POST['data']) ? json_decode(wp_unslash($_POST['data']), true) : [];
-        if (empty($data) || !is_array($data)) {
-            wp_send_json_error(['message' => __('Invalid data.', 'lz-builder')]);
-        }
-        LZ_Page_Data::update_layout_data($post_id, $data, 'draft');
+
+        // Draft is already authoritative server-side.  This endpoint is a no-op
+        // that just acknowledges the save and clears the CSS accumulator.
+        LZ_CSS_Accumulator::clear();
         wp_send_json_success(['message' => __('Draft saved.', 'lz-builder')]);
     }
 
     public static function get_layout(): void {
         self::check_permissions();
         $post_id = self::get_post_id_from_request();
-        $status = isset($_REQUEST['status']) ? sanitize_text_field(wp_unslash($_REQUEST['status'])) : 'published';
-        $data = LZ_Page_Data::get_layout_data($post_id, $status);
+        $status  = isset($_REQUEST['status']) ? sanitize_text_field(wp_unslash($_REQUEST['status'])) : 'published';
+        $data    = LZ_Page_Data::get_layout_data($post_id, $status);
         wp_send_json_success(['data' => $data]);
     }
 
+    // ---- Row ----
+
     public static function add_row(): void {
         self::check_permissions();
-        $post_id = self::get_post_id_from_request();
-        $layout = isset($_POST['layout']) ? sanitize_text_field(wp_unslash($_POST['layout'])) : '1-col';
+        $post_id  = self::get_post_id_from_request();
+        $layout   = isset($_POST['layout']) ? sanitize_text_field(wp_unslash($_POST['layout'])) : '1-col';
         $position = isset($_POST['position']) ? (int) $_POST['position'] : 0;
-        $row_id = LZ_Page_Data::add_row($post_id, $layout, $position);
+        $row_id   = LZ_Page_Data::add_row($post_id, $layout, $position, 'draft');
         wp_send_json_success(['node_id' => $row_id, 'message' => __('Row added.', 'lz-builder')]);
     }
 
+    // ---- Module ----
+
     public static function add_module(): void {
         self::check_permissions();
-        $post_id = self::get_post_id_from_request();
+        $post_id    = self::get_post_id_from_request();
         $module_slug = isset($_POST['module']) ? sanitize_text_field(wp_unslash($_POST['module'])) : '';
-        $parent_id = isset($_POST['parent_id']) ? sanitize_text_field(wp_unslash($_POST['parent_id'])) : '';
-        $position = isset($_POST['position']) ? (int) $_POST['position'] : 0;
+        $parent_id  = isset($_POST['parent_id']) ? sanitize_text_field(wp_unslash($_POST['parent_id'])) : '';
+        $position   = isset($_POST['position']) ? (int) $_POST['position'] : 0;
 
         if (empty($module_slug)) {
             wp_send_json_error(['message' => __('Missing parameters.', 'lz-builder')]);
@@ -143,27 +154,12 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => __('Module not available on your plan.', 'lz-builder')]);
         }
 
+        // If no parent_id was sent, find the last column in the current layout.
         if (empty($parent_id)) {
-            $row_id = LZ_Page_Data::add_row($post_id, '1-col', 0);
-            $data = LZ_Page_Data::get_layout_data($post_id);
-            $group_id = '';
-            foreach ($data as $node) {
-                if (($node['type'] ?? '') === 'column-group' && ($node['parent_id'] ?? '') === $row_id) {
-                    $group_id = $node['node_id'];
-                    break;
-                }
-            }
-            if ($group_id) {
-                foreach ($data as $node) {
-                    if (($node['type'] ?? '') === 'column' && ($node['parent_id'] ?? '') === $group_id) {
-                        $parent_id = $node['node_id'];
-                        break;
-                    }
-                }
-            }
+            $parent_id = LZ_Page_Data::find_last_column($post_id, 'draft');
         }
 
-        $node_id = LZ_Page_Data::add_module($post_id, $module_slug, $parent_id, $position);
+        $node_id = LZ_Page_Data::add_module($post_id, $module_slug, $parent_id, $position, 'draft');
         if (is_wp_error($node_id)) {
             wp_send_json_error(['message' => $node_id->get_error_message()]);
         }
@@ -171,12 +167,11 @@ class LZ_AJAX_Handlers {
             LZ_CSS_Accumulator::clear();
         }
 
-        // Wrap module rendering in try-catch so one failing module
-        // does not break the whole AJAX response.
+        // Render module for the preview.
         $rendered_html = '';
-        $render_error = '';
+        $render_error  = '';
         try {
-            $module_node = LZ_Page_Data::get_node($node_id, $post_id);
+            $module_node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
             if ($module_node) {
                 $module_obj = LZ_Module_Registry::get_instance()->get_module($module_slug);
                 if ($module_obj) {
@@ -195,24 +190,23 @@ class LZ_AJAX_Handlers {
             error_log('[Lz Builder] Module render error for "' . $module_slug . '": ' . $render_error);
         }
 
-        // Wrap full layout rendering too — get_builder_content can fail
-        // if row/column data structures are malformed.
         $layout_html = '';
         try {
-            $layout_html = LZ_Page_Data::get_builder_content($post_id);
+            $layout_html = LZ_Page_Data::get_builder_content($post_id, 'draft');
         } catch (\Throwable $e) {
             error_log('[Lz Builder] Layout render error: ' . $e->getMessage());
-            $layout_html = '<!-- Layout render error: ' . esc_html($e->getMessage()) . ' -->';
         }
 
         wp_send_json_success([
-            'node_id'     => $node_id,
-            'html'        => $rendered_html,
-            'layout'      => $layout_html,
+            'node_id'      => $node_id,
+            'html'         => $rendered_html,
+            'layout'       => $layout_html,
             'render_error' => $render_error,
-            'message'     => __('Module added.', 'lz-builder'),
+            'message'      => __('Module added.', 'lz-builder'),
         ]);
     }
+
+    // ---- Delete / Move / Duplicate ----
 
     public static function delete_node(): void {
         self::check_permissions();
@@ -221,22 +215,22 @@ class LZ_AJAX_Handlers {
         if (empty($node_id)) {
             wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
         }
-        LZ_Page_Data::delete_node($node_id, $post_id);
+        LZ_Page_Data::delete_node($node_id, $post_id, 'draft');
         wp_send_json_success(['message' => __('Node deleted.', 'lz-builder')]);
     }
 
     public static function move_node(): void {
         self::check_permissions();
-        $post_id = self::get_post_id_from_request();
-        $node_id = isset($_POST['node_id']) ? sanitize_text_field(wp_unslash($_POST['node_id'])) : '';
+        $post_id   = self::get_post_id_from_request();
+        $node_id   = isset($_POST['node_id']) ? sanitize_text_field(wp_unslash($_POST['node_id'])) : '';
         $parent_id = isset($_POST['parent_id']) ? sanitize_text_field(wp_unslash($_POST['parent_id'])) : '';
-        $position = isset($_POST['position']) ? (int) $_POST['position'] : 0;
+        $position  = isset($_POST['position']) ? (int) $_POST['position'] : 0;
 
         if (empty($node_id)) {
             wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
         }
 
-        LZ_Page_Data::move_node($node_id, $parent_id, $position, $post_id);
+        LZ_Page_Data::move_node($node_id, $parent_id, $position, $post_id, 'draft');
         wp_send_json_success(['message' => __('Node moved.', 'lz-builder')]);
     }
 
@@ -247,13 +241,15 @@ class LZ_AJAX_Handlers {
         if (empty($node_id)) {
             wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
         }
-        $new_id = LZ_Page_Data::duplicate_node($node_id, $post_id);
+        $new_id = LZ_Page_Data::duplicate_node($node_id, $post_id, 'draft');
         wp_send_json_success(['node_id' => $new_id, 'message' => __('Node duplicated.', 'lz-builder')]);
     }
 
+    // ---- Settings ----
+
     public static function save_settings(): void {
         self::check_permissions();
-        $node_id = isset($_POST['node_id']) ? sanitize_text_field(wp_unslash($_POST['node_id'])) : '';
+        $node_id  = isset($_POST['node_id']) ? sanitize_text_field(wp_unslash($_POST['node_id'])) : '';
         $settings = isset($_POST['settings']) ? json_decode(wp_unslash($_POST['settings'])) : null;
 
         if (empty($node_id) || !$settings instanceof \stdClass) {
@@ -262,9 +258,9 @@ class LZ_AJAX_Handlers {
 
         $post_id = self::get_post_id_from_request();
 
-        $node = LZ_Page_Data::get_node($node_id, $post_id);
+        $node        = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
         $module_slug = $node->module ?? '';
-        $module_obj = $node && 'module' === $node->type && $module_slug
+        $module_obj  = $node && 'module' === $node->type && $module_slug
             ? LZ_Module_Registry::get_instance()->get_module($module_slug)
             : null;
 
@@ -277,10 +273,11 @@ class LZ_AJAX_Handlers {
             );
         }
 
-        $updated = LZ_Page_Data::save_settings($node_id, $settings, $post_id);
+        $updated = LZ_Page_Data::save_settings($node_id, $settings, $post_id, 'draft');
         LZ_CSS_Accumulator::clear();
 
-        $node = LZ_Page_Data::get_node($node_id, $post_id);
+        // Re-fetch after save so the rendered HTML reflects the new settings.
+        $node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
         $html = '';
         if ($module_obj && $node) {
             try {
@@ -316,13 +313,13 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
         }
 
-        $node = LZ_Page_Data::get_node($node_id, $post_id);
+        $node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
         if (!$node || 'module' !== $node->type) {
             wp_send_json_error(['message' => __('Node not found or not a module.', 'lz-builder')]);
         }
 
         $module_slug = $node->module ?? '';
-        $module_obj = LZ_Module_Registry::get_instance()->get_module($module_slug);
+        $module_obj  = LZ_Module_Registry::get_instance()->get_module($module_slug);
         if (!$module_obj || !method_exists($module_obj, 'get_settings_form')) {
             wp_send_json_error(['message' => __('Module not found.', 'lz-builder')]);
         }
@@ -703,7 +700,7 @@ class LZ_AJAX_Handlers {
 
     public static function apply_template(): void {
         self::check_permissions();
-        $post_id = self::get_post_id_from_request();
+        $post_id     = self::get_post_id_from_request();
         $template_id = isset($_POST['template_id']) ? (int) $_POST['template_id'] : 0;
 
         if (!$template_id) {
@@ -723,7 +720,8 @@ class LZ_AJAX_Handlers {
             $template_data = LZ_Subscription_Gate::filter_available_modules($template_data);
         }
 
-        LZ_Page_Data::update_layout_data($post_id, $template_data, 'published');
+        // Template applied to draft, not published — user must publish to make live.
+        LZ_Page_Data::update_layout_data($post_id, $template_data, 'draft');
         if (class_exists('LzBuilder\LZ_CSS_Accumulator')) {
             LZ_CSS_Accumulator::clear();
         }
@@ -732,7 +730,7 @@ class LZ_AJAX_Handlers {
 
     public static function search_modules(): void {
         self::check_permissions();
-        $search = isset($_REQUEST['search']) ? sanitize_text_field(wp_unslash($_REQUEST['search'])) : '';
+        $search  = isset($_REQUEST['search']) ? sanitize_text_field(wp_unslash($_REQUEST['search'])) : '';
         $modules = LZ_Module_Registry::get_instance()->get_all_modules();
         $results = [];
 
@@ -744,9 +742,9 @@ class LZ_AJAX_Handlers {
             $description = $module->get_description();
             if (!empty($search)) {
                 $search_lower = strtolower($search);
-                $name_lower = strtolower($name);
-                $desc_lower = strtolower($description);
-                $slug_lower = strtolower($slug);
+                $name_lower   = strtolower($name);
+                $desc_lower   = strtolower($description);
+                $slug_lower   = strtolower($slug);
                 if (strpos($name_lower, $search_lower) === false
                     && strpos($desc_lower, $search_lower) === false
                     && strpos($slug_lower, $search_lower) === false) {
@@ -765,50 +763,46 @@ class LZ_AJAX_Handlers {
         wp_send_json_success(['modules' => $results]);
     }
 
-    public static function save_layout_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $post_id = (int) $request->get_param('post_id');
-        $data = $request->get_param('data');
-        if (empty($data) || !is_array($data)) {
-            return new \WP_REST_Response(['success' => false, 'message' => __('Invalid data.', 'lz-builder')], 400);
-        }
+    // ======== REST Endpoints ========
+
+    public static function publish_rest(\WP_REST_Request $request): \WP_REST_Response {
+        $post_id   = (int) $request->get_param('post_id');
+        $draft_data = LZ_Page_Data::get_layout_data($post_id, 'draft');
+        $data       = is_array($draft_data) ? $draft_data : [];
+
         if (class_exists('LzBuilder\LZ_Subscription_Gate')) {
             $data = LZ_Subscription_Gate::filter_available_modules($data);
         }
         LZ_Page_Data::update_layout_data($post_id, $data, 'published');
         LZ_CSS_Accumulator::clear();
-        return new \WP_REST_Response(['success' => true, 'message' => __('Layout saved.', 'lz-builder')], 200);
+        return new \WP_REST_Response(['success' => true, 'message' => __('Layout published.', 'lz-builder')], 200);
     }
 
     public static function save_draft_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $post_id = (int) $request->get_param('post_id');
-        $data = $request->get_param('data');
-        if (empty($data) || !is_array($data)) {
-            return new \WP_REST_Response(['success' => false, 'message' => __('Invalid data.', 'lz-builder')], 400);
-        }
-        LZ_Page_Data::update_layout_data($post_id, $data, 'draft');
+        LZ_CSS_Accumulator::clear();
         return new \WP_REST_Response(['success' => true, 'message' => __('Draft saved.', 'lz-builder')], 200);
     }
 
     public static function get_layout_rest(\WP_REST_Request $request): \WP_REST_Response {
         $post_id = (int) $request->get_param('post_id');
-        $status = $request->get_param('status') ?: 'published';
-        $data = LZ_Page_Data::get_layout_data($post_id, $status);
+        $status  = $request->get_param('status') ?: 'published';
+        $data    = LZ_Page_Data::get_layout_data($post_id, $status);
         return new \WP_REST_Response(['success' => true, 'data' => $data], 200);
     }
 
     public static function add_row_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $post_id = (int) $request->get_param('post_id');
-        $layout = $request->get_param('layout') ?: '1-col';
+        $post_id  = (int) $request->get_param('post_id');
+        $layout   = $request->get_param('layout') ?: '1-col';
         $position = (int) $request->get_param('position');
-        $row_id = LZ_Page_Data::add_row($post_id, $layout, $position);
+        $row_id   = LZ_Page_Data::add_row($post_id, $layout, $position, 'draft');
         return new \WP_REST_Response(['success' => true, 'node_id' => $row_id], 200);
     }
 
     public static function add_module_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $post_id = (int) $request->get_param('post_id');
+        $post_id     = (int) $request->get_param('post_id');
         $module_slug = $request->get_param('module');
-        $parent_id = $request->get_param('parent_id');
-        $position = (int) $request->get_param('position');
+        $parent_id   = $request->get_param('parent_id') ?: '';
+        $position    = (int) $request->get_param('position');
 
         if (empty($module_slug)) {
             return new \WP_REST_Response(['success' => false, 'message' => __('Missing parameters.', 'lz-builder')], 400);
@@ -819,26 +813,10 @@ class LZ_AJAX_Handlers {
         }
 
         if (empty($parent_id)) {
-            $row_id = LZ_Page_Data::add_row($post_id, '1-col', 0);
-            $rendered = LZ_Page_Data::get_layout_data($post_id);
-            $group_id = '';
-            foreach ($rendered as $node) {
-                if (($node['type'] ?? '') === 'column' && ($node['parent_id'] ?? '') === $row_id) {
-                    $group_id = $node['node_id'];
-                    break;
-                }
-            }
-            if ($group_id) {
-                foreach ($rendered as $node) {
-                    if (($node['type'] ?? '') === 'column' && ($node['parent_id'] ?? '') === $group_id) {
-                        $parent_id = $node['node_id'];
-                        break;
-                    }
-                }
-            }
+            $parent_id = LZ_Page_Data::find_last_column($post_id, 'draft');
         }
 
-        $node_id = LZ_Page_Data::add_module($post_id, $module_slug, $parent_id, $position);
+        $node_id = LZ_Page_Data::add_module($post_id, $module_slug, $parent_id, $position, 'draft');
         return new \WP_REST_Response(['success' => true, 'node_id' => $node_id], 200);
     }
 
@@ -848,19 +826,19 @@ class LZ_AJAX_Handlers {
         if (empty($node_id)) {
             return new \WP_REST_Response(['success' => false, 'message' => __('Node ID required.', 'lz-builder')], 400);
         }
-        LZ_Page_Data::delete_node($node_id, $post_id);
+        LZ_Page_Data::delete_node($node_id, $post_id, 'draft');
         return new \WP_REST_Response(['success' => true, 'message' => __('Node deleted.', 'lz-builder')], 200);
     }
 
     public static function move_node_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $post_id = (int) $request->get_param('post_id');
-        $node_id = $request->get_param('node_id');
+        $post_id   = (int) $request->get_param('post_id');
+        $node_id   = $request->get_param('node_id');
         $parent_id = $request->get_param('parent_id');
-        $position = (int) $request->get_param('position');
+        $position  = (int) $request->get_param('position');
         if (empty($node_id)) {
             return new \WP_REST_Response(['success' => false, 'message' => __('Node ID required.', 'lz-builder')], 400);
         }
-        LZ_Page_Data::move_node($node_id, $parent_id, $position, $post_id);
+        LZ_Page_Data::move_node($node_id, $parent_id, $position, $post_id, 'draft');
         return new \WP_REST_Response(['success' => true, 'message' => __('Node moved.', 'lz-builder')], 200);
     }
 
@@ -870,50 +848,31 @@ class LZ_AJAX_Handlers {
         if (empty($node_id)) {
             return new \WP_REST_Response(['success' => false, 'message' => __('Node ID required.', 'lz-builder')], 400);
         }
-        $new_id = LZ_Page_Data::duplicate_node($node_id, $post_id);
+        $new_id = LZ_Page_Data::duplicate_node($node_id, $post_id, 'draft');
         return new \WP_REST_Response(['success' => true, 'node_id' => $new_id], 200);
     }
 
     public static function save_settings_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $node_id = $request->get_param('node_id');
+        $node_id  = $request->get_param('node_id');
         $settings = $request->get_param('settings');
-        $post_id = (int) $request->get_param('post_id');
-        if (empty($node_id) || !$settings instanceof \stdClass) {
+        $post_id  = (int) $request->get_param('post_id');
+
+        if (empty($node_id) || !is_object($settings)) {
             return new \WP_REST_Response(['success' => false, 'message' => __('Invalid parameters.', 'lz-builder')], 400);
         }
-        $updated = LZ_Page_Data::save_settings($node_id, $settings, $post_id);
-        LZ_CSS_Accumulator::clear();
-        return new \WP_REST_Response(['success' => true, 'settings' => $updated], 200);
-    }
 
-    public static function render_settings_form_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $post_id = (int) $request->get_param('post_id');
-        $node_id = $request->get_param('node_id');
-
-        if (empty($node_id)) {
-            return new \WP_REST_Response(['success' => false, 'message' => __('Node ID required.', 'lz-builder')], 400);
-        }
-
-        $node = LZ_Page_Data::get_node($node_id, $post_id);
-        if (!$node || 'module' !== $node->type) {
-            return new \WP_REST_Response(['success' => false, 'message' => __('Node not found.', 'lz-builder')], 404);
-        }
-
+        $node        = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
         $module_slug = $node->module ?? '';
-        $module_obj = LZ_Module_Registry::get_instance()->get_module($module_slug);
-        if (!$module_obj) {
-            return new \WP_REST_Response(['success' => false, 'message' => __('Module not found.', 'lz-builder')], 404);
+        $module_obj  = LZ_Module_Registry::get_instance()->get_module($module_slug);
+
+        if ($module_obj && is_object($settings)) {
+            $form = $module_obj->get_settings_form();
+            \LzBuilder\LZ_Settings_Form::register($module_slug, $form);
+            $settings = (object) \LzBuilder\LZ_Settings_Form::sanitize_settings((array) $settings, $module_slug);
         }
 
-        $current_settings = isset($node->settings) && is_object($node->settings)
-            ? (array) $node->settings
-            : [];
-
-        return new \WP_REST_Response([
-            'success'  => true,
-            'node_id'  => $node_id,
-            'settings' => $current_settings,
-        ], 200);
+        $updated = LZ_Page_Data::save_settings($node_id, (object) $settings, $post_id, 'draft');
+        return new \WP_REST_Response(['success' => true, 'settings' => $updated], 200);
     }
 
     public static function render_node_rest(\WP_REST_Request $request): \WP_REST_Response {
@@ -924,7 +883,7 @@ class LZ_AJAX_Handlers {
             return new \WP_REST_Response(['success' => false, 'message' => __('Node ID required.', 'lz-builder')], 400);
         }
 
-        $node = LZ_Page_Data::get_node($node_id, $post_id);
+        $node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
         if (!$node) {
             return new \WP_REST_Response(['success' => false, 'message' => __('Node not found.', 'lz-builder')], 404);
         }
@@ -936,11 +895,33 @@ class LZ_AJAX_Handlers {
 
         $module = LZ_Module_Registry::get_instance()->get_module($node->module ?? '');
         if (!$module || !method_exists($module, 'render')) {
-            return new \WP_REST_Response(['success' => false, 'message' => __('Module renderer not found.', 'lz-builder')], 404);
+            return new \WP_REST_Response(['success' => false, 'message' => __('Module renderer not found.', 'lz-builder')], 500);
         }
 
         $html = $module->render($node, $node->settings);
         return new \WP_REST_Response(['success' => true, 'html' => $html], 200);
+    }
+
+    public static function render_settings_form_rest(\WP_REST_Request $request): \WP_REST_Response {
+        $post_id = (int) $request->get_param('post_id');
+        $node_id = $request->get_param('node_id');
+
+        $node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
+        if (!$node || 'module' !== $node->type) {
+            return new \WP_REST_Response(['success' => false, 'message' => __('Node not found.', 'lz-builder')], 404);
+        }
+
+        $module_obj = LZ_Module_Registry::get_instance()->get_module($node->module ?? '');
+        if (!$module_obj || !method_exists($module_obj, 'get_settings_form')) {
+            return new \WP_REST_Response(['success' => false, 'message' => __('Module not found.', 'lz-builder')], 404);
+        }
+
+        // Delegate to the inline renderer for settings forms.
+        ob_start();
+        self::render_settings_form_for_node($node, $module_obj, intval($post_id));
+        $html = ob_get_clean();
+
+        return new \WP_REST_Response(['success' => true, 'html' => $html, 'node_id' => $node_id], 200);
     }
 
     public static function get_templates_rest(\WP_REST_Request $request): \WP_REST_Response {
@@ -950,7 +931,7 @@ class LZ_AJAX_Handlers {
             'post_status'    => 'publish',
         ];
 
-        $query = new \WP_Query($args);
+        $query     = new \WP_Query($args);
         $templates = [];
 
         foreach ($query->posts as $post) {
@@ -959,11 +940,11 @@ class LZ_AJAX_Handlers {
                 $accessible = LZ_Subscription_Gate::is_template_accessible($post->ID);
             }
             $templates[] = [
-                'id'          => $post->ID,
-                'title'       => $post->post_title,
-                'thumbnail'   => get_the_post_thumbnail_url($post->ID, 'medium') ?: '',
-                'accessible'  => $accessible,
-                'category'    => get_post_meta($post->ID, '_lz_template_category', true) ?: 'general',
+                'id'         => $post->ID,
+                'title'      => $post->post_title,
+                'thumbnail'  => get_the_post_thumbnail_url($post->ID, 'medium') ?: '',
+                'accessible' => $accessible,
+                'category'   => get_post_meta($post->ID, '_lz_template_category', true) ?: 'general',
             ];
         }
 
@@ -971,7 +952,7 @@ class LZ_AJAX_Handlers {
     }
 
     public static function apply_template_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $post_id = (int) $request->get_param('post_id');
+        $post_id     = (int) $request->get_param('post_id');
         $template_id = (int) $request->get_param('template_id');
 
         if (!$template_id) {
@@ -991,12 +972,15 @@ class LZ_AJAX_Handlers {
             $template_data = LZ_Subscription_Gate::filter_available_modules($template_data);
         }
 
-        LZ_Page_Data::update_layout_data($post_id, $template_data, 'published');
+        LZ_Page_Data::update_layout_data($post_id, $template_data, 'draft');
+        if (class_exists('LzBuilder\LZ_CSS_Accumulator')) {
+            LZ_CSS_Accumulator::clear();
+        }
         return new \WP_REST_Response(['success' => true, 'message' => __('Template applied.', 'lz-builder')], 200);
     }
 
     public static function search_modules_rest(\WP_REST_Request $request): \WP_REST_Response {
-        $search = $request->get_param('search') ?: '';
+        $search  = $request->get_param('search') ?: '';
         $modules = LZ_Module_Registry::get_instance()->get_all_modules();
         $results = [];
 
@@ -1005,22 +989,19 @@ class LZ_AJAX_Handlers {
                 continue;
             }
             $name = $module->get_name();
-            $description = $module->get_description();
+            $desc = $module->get_description();
             if (!empty($search)) {
-                $search_lower = strtolower($search);
-                $name_lower = strtolower($name);
-                $desc_lower = strtolower($description);
-                $slug_lower = strtolower($slug);
-                if (strpos($name_lower, $search_lower) === false
-                    && strpos($desc_lower, $search_lower) === false
-                    && strpos($slug_lower, $search_lower) === false) {
+                $s = strtolower($search);
+                if (strpos(strtolower($name), $s) === false
+                    && strpos(strtolower($desc), $s) === false
+                    && strpos(strtolower($slug), $s) === false) {
                     continue;
                 }
             }
             $results[] = [
                 'slug'        => $slug,
                 'name'        => $name,
-                'description' => $description,
+                'description' => $desc,
                 'icon'        => $module->get_icon(),
                 'category'    => $module->get_category(),
             ];

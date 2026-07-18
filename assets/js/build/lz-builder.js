@@ -83,7 +83,9 @@ function App({
   data
 }) {
   const [state, dispatch] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useReducer)(_store__WEBPACK_IMPORTED_MODULE_1__.reducer, _store__WEBPACK_IMPORTED_MODULE_1__.initialState);
+  const [isDragging, setIsDragging] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
   const iframeRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const dragCounter = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(0);
   const showNotice = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)((message, type = 'success', textOnly = false) => {
     const id = Date.now() + Math.random() * 1000;
     dispatch({
@@ -113,7 +115,7 @@ function App({
   }, [postToIframe]);
   const refreshLayout = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
     (0,_api__WEBPACK_IMPORTED_MODULE_2__.lzFetch)('get_layout', {
-      status: 'published'
+      status: 'draft'
     }).then(r => {
       const layout = r && r.success && r.data && r.data.data || [];
       dispatch({
@@ -124,6 +126,27 @@ function App({
         type: 'SET_LAYOUT_LOADED'
       });
     });
+  }, []);
+
+  // Global drag-state tracking so the iframe drop overlay works reliably
+  // across Chrome and Firefox.
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    function handleDragStart() {
+      dragCounter.current += 1;
+      setIsDragging(true);
+    }
+    function handleDragEnd() {
+      dragCounter.current = Math.max(0, dragCounter.current - 1);
+      if (dragCounter.current === 0) {
+        setIsDragging(false);
+      }
+    }
+    document.addEventListener('dragstart', handleDragStart);
+    document.addEventListener('dragend', handleDragEnd);
+    return () => {
+      document.removeEventListener('dragstart', handleDragStart);
+      document.removeEventListener('dragend', handleDragEnd);
+    };
   }, []);
   (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
     refreshLayout();
@@ -168,7 +191,8 @@ function App({
     showNotice,
     iframeRef,
     dispatch,
-    refreshLayout
+    refreshLayout,
+    isDragging
   })));
 }
 
@@ -195,13 +219,12 @@ function Canvas({
   showNotice,
   iframeRef,
   dispatch,
-  refreshLayout
+  refreshLayout,
+  isDragging
 }) {
-  const [dragOver, setDragOver] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
   const previewUrl = (0,_api__WEBPACK_IMPORTED_MODULE_1__.getPreviewUrl)();
   const handleDrop = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
     e.preventDefault();
-    setDragOver(false);
     const slug = e.dataTransfer.getData('text/plain');
     if (slug) {
       (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('add_module', {
@@ -225,29 +248,23 @@ function Canvas({
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
   }, []);
-  const handleDragEnter = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
-    setDragOver(true);
-  }, []);
-  const handleDragLeave = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-      setDragOver(false);
-    }
-  }, []);
   return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
-    className: 'lz-builder-canvas' + (dragOver ? ' lz-builder-canvas--drag' : ''),
+    className: 'lz-builder-canvas',
     onDrop: handleDrop,
-    onDragOver: handleDragOver,
-    onDragEnter: handleDragEnter,
-    onDragLeave: handleDragLeave
+    onDragOver: handleDragOver
   }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
-    className: 'lz-drop-zone' + (dragOver ? ' lz-drop-zone--active' : '')
+    className: 'lz-drop-zone' + (isDragging ? ' lz-drop-zone--active' : '')
   }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-drop-zone-text'
   }, 'Drop module here')), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('iframe', {
     ref: iframeRef,
     id: 'lz-builder-iframe',
     className: 'lz-builder-frame',
-    src: previewUrl
+    title: 'Lz Builder Preview',
+    src: previewUrl,
+    style: isDragging ? {
+      pointerEvents: 'none'
+    } : undefined
   }));
 }
 
@@ -871,9 +888,7 @@ function Toolbar({
   showNotice
 }) {
   const handleSave = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
-    (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('save_draft', {
-      data: state.layout
-    }).then(r => {
+    (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('save_draft', {}).then(r => {
       if (r && r.success) {
         showNotice('Draft saved!', 'success');
         dispatch({
@@ -884,11 +899,9 @@ function Toolbar({
         showNotice(r && r.data && r.data.message || 'Could not save.', 'error');
       }
     });
-  }, [state.layout, showNotice, dispatch]);
+  }, [showNotice, dispatch]);
   const handlePublish = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
-    (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('save_layout', {
-      data: state.layout
-    }).then(r => {
+    (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('save_layout', {}).then(r => {
       if (r && r.success) {
         showNotice('Page published!', 'success');
         dispatch({
@@ -899,7 +912,7 @@ function Toolbar({
         showNotice(r && r.data && r.data.message || 'Could not publish.', 'error');
       }
     });
-  }, [state.layout, showNotice, dispatch]);
+  }, [showNotice, dispatch]);
   return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-toolbar'
   }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {

@@ -28,6 +28,12 @@ class LZ_Page_Data {
             $decoded = json_decode($raw, true);
             $data = is_array($decoded) ? $decoded : [];
         }
+
+        // Draft fallback: if no draft exists, use published data instead.
+        if ('draft' === $status && empty($data)) {
+            return self::get_layout_data($post_id, 'published');
+        }
+
         self::$cache[$cache_key] = $data;
         return $data;
     }
@@ -37,13 +43,13 @@ class LZ_Page_Data {
         return !empty($data);
     }
 
-    public static function get_builder_content(int $post_id): string {
-        $data = self::get_layout_data($post_id);
+    public static function get_builder_content(int $post_id, string $status = 'published'): string {
+        $data = self::get_layout_data($post_id, $status);
         if (empty($data)) {
             return '';
         }
         $ordered = self::sort_nodes($data);
-        $html = '<div class="lz-builder-content fl-builder-content-' . esc_attr($post_id) . '">';
+        $html = '<div class="lz-builder-content">';
         foreach ($ordered as $node) {
             if ('row' === $node['type'] && !$node['parent_id']) {
                 $html .= self::render_row($node, $data);
@@ -110,8 +116,6 @@ class LZ_Page_Data {
         $settings = isset($module_node['settings']) ? (object) $module_node['settings'] : new \stdClass();
         $html = $module_obj->render($node, $settings);
 
-        // Inject data-node-id attribute for editor click targeting.
-        // If the renderer already added it, skip; otherwise add it to the first HTML tag.
         if (false === strpos($html, 'data-node-id=')) {
             $html = preg_replace(
                 '/<(\w+)([^>]*)>/',
@@ -199,7 +203,7 @@ class LZ_Page_Data {
         return $result;
     }
 
-    public static function add_node(array $args): string {
+    public static function add_node(array $args, string $status = 'draft'): string {
         $defaults = [
             'node_id'   => self::generate_node_id(),
             'type'      => 'module',
@@ -210,14 +214,14 @@ class LZ_Page_Data {
         ];
         $node = array_merge($defaults, $args);
         $node['node_id'] = $node['node_id'] ?? self::generate_node_id();
-        $data = self::get_current_data();
+        $data = self::get_current_data($status);
         $data[] = $node;
-        self::save_current_data($data);
+        self::save_current_data($data, $status);
         return $node['node_id'];
     }
 
-    public static function delete_node(string $node_id, int $post_id = 0): void {
-        $data = $post_id > 0 ? self::get_layout_data($post_id) : self::get_current_data();
+    public static function delete_node(string $node_id, int $post_id = 0, string $status = 'draft'): void {
+        $data = $post_id > 0 ? self::get_layout_data($post_id, $status) : self::get_current_data($status);
         $to_remove = [$node_id];
         $children = self::get_child_ids($data, $node_id);
         $to_remove = array_merge($to_remove, $children);
@@ -225,14 +229,14 @@ class LZ_Page_Data {
             return isset($node['node_id']) && !in_array($node['node_id'], $to_remove, true);
         }));
         if ($post_id > 0) {
-            self::update_layout_data($post_id, $data);
+            self::update_layout_data($post_id, $data, $status);
         } else {
-            self::save_current_data($data);
+            self::save_current_data($data, $status);
         }
     }
 
-    public static function move_node(string $node_id, string $new_parent_id, int $new_position, int $post_id = 0): void {
-        $data = $post_id > 0 ? self::get_layout_data($post_id) : self::get_current_data();
+    public static function move_node(string $node_id, string $new_parent_id, int $new_position, int $post_id = 0, string $status = 'draft'): void {
+        $data = $post_id > 0 ? self::get_layout_data($post_id, $status) : self::get_current_data($status);
         foreach ($data as &$node) {
             if (isset($node['node_id']) && $node['node_id'] === $node_id) {
                 $node['parent_id'] = $new_parent_id;
@@ -242,14 +246,14 @@ class LZ_Page_Data {
         }
         unset($node);
         if ($post_id > 0) {
-            self::update_layout_data($post_id, $data);
+            self::update_layout_data($post_id, $data, $status);
         } else {
-            self::save_current_data($data);
+            self::save_current_data($data, $status);
         }
     }
 
-    public static function duplicate_node(string $node_id, int $post_id = 0): string {
-        $data = $post_id > 0 ? self::get_layout_data($post_id) : self::get_current_data();
+    public static function duplicate_node(string $node_id, int $post_id = 0, string $status = 'draft'): string {
+        $data = $post_id > 0 ? self::get_layout_data($post_id, $status) : self::get_current_data($status);
         $node_map = [];
         $new_root_id = '';
 
@@ -274,9 +278,9 @@ class LZ_Page_Data {
         }
 
         if ($post_id > 0) {
-            self::update_layout_data($post_id, $data);
+            self::update_layout_data($post_id, $data, $status);
         } else {
-            self::save_current_data($data);
+            self::save_current_data($data, $status);
         }
         return $new_root_id;
     }
@@ -285,12 +289,12 @@ class LZ_Page_Data {
         return 'lz_node_' . wp_generate_uuid4();
     }
 
-    public static function add_row(int $post_id, string $layout = '1-col', int $position = 0): string {
+    public static function add_row(int $post_id, string $layout = '1-col', int $position = 0, string $status = 'draft'): string {
         if (!isset(self::$row_layouts[$layout])) {
             $layout = '1-col';
         }
         $widths = self::$row_layouts[$layout];
-        $data = self::get_layout_data($post_id);
+        $data = self::get_layout_data($post_id, $status);
         $row_id = self::generate_node_id();
         $group_id = self::generate_node_id();
 
@@ -327,12 +331,27 @@ class LZ_Page_Data {
             $data[] = $col;
         }
 
-        self::update_layout_data($post_id, $data);
+        self::update_layout_data($post_id, $data, $status);
         return $row_id;
     }
 
-    public static function add_module(int $post_id, string $module_slug, string $parent_id, int $position = 0): string {
-        $data = self::get_layout_data($post_id);
+    public static function add_module(int $post_id, string $module_slug, string $parent_id, int $position = 0, string $status = 'draft'): string {
+        $data = self::get_layout_data($post_id, $status);
+
+        // Auto-create a 1-col row only if the layout is completely empty.
+        if (empty($data)) {
+            $row_id = self::add_row($post_id, '1-col', 0, $status);
+            $data = self::get_layout_data($post_id, $status);
+            $parent_id = '';
+
+            foreach ($data as $node) {
+                if (($node['type'] ?? '') === 'column' && ($node['parent_id'] ?? '') !== '') {
+                    $parent_id = $node['node_id'];
+                    break;
+                }
+            }
+        }
+
         $node_id = self::generate_node_id();
         $defaults = self::get_module_default_settings($module_slug);
 
@@ -345,8 +364,24 @@ class LZ_Page_Data {
             'settings'  => $defaults,
         ];
         $data[] = $node;
-        self::update_layout_data($post_id, $data);
+        self::update_layout_data($post_id, $data, $status);
         return $node_id;
+    }
+
+    /**
+     * Find the last column node ID in the layout (for appending modules).
+     */
+    public static function find_last_column(int $post_id, string $status = 'draft'): string {
+        $data = self::get_layout_data($post_id, $status);
+        $last = '';
+        $last_pos = -1;
+        foreach ($data as $node) {
+            if (($node['type'] ?? '') === 'column' && ($node['position'] ?? -1) > $last_pos) {
+                $last = $node['node_id'];
+                $last_pos = (int) $node['position'];
+            }
+        }
+        return $last;
     }
 
     public static function get_node_settings(string $node_id, int $post_id = 0): ?\stdClass {
@@ -362,8 +397,8 @@ class LZ_Page_Data {
         return null;
     }
 
-    public static function save_settings(string $node_id, \stdClass $new_settings, int $post_id = 0): \stdClass {
-        $data = $post_id > 0 ? self::get_layout_data($post_id) : self::get_current_data();
+    public static function save_settings(string $node_id, \stdClass $new_settings, int $post_id = 0, string $status = 'draft'): \stdClass {
+        $data = $post_id > 0 ? self::get_layout_data($post_id, $status) : self::get_current_data($status);
         $updated = false;
         $merged = $new_settings;
         foreach ($data as &$node) {
@@ -387,9 +422,9 @@ class LZ_Page_Data {
         unset($node);
         if ($updated) {
             if ($post_id > 0) {
-                self::update_layout_data($post_id, $data);
+                self::update_layout_data($post_id, $data, $status);
             } else {
-                self::save_current_data($data);
+                self::save_current_data($data, $status);
             }
         }
         return $merged ?? $new_settings;
@@ -473,31 +508,31 @@ class LZ_Page_Data {
         }
     }
 
-    private static function get_current_data(): array {
+    private static function get_current_data(string $status = 'draft'): array {
         global $post;
         if (isset($post) && $post instanceof \WP_Post) {
-            return self::get_layout_data($post->ID);
+            return self::get_layout_data($post->ID, $status);
         }
         $backtrace = debug_backtrace(0, 5);
         foreach ($backtrace as $frame) {
             if (isset($frame['args'][0]) && (is_numeric($frame['args'][0]) || $frame['args'][0] instanceof \WP_Post)) {
                 $pid = $frame['args'][0] instanceof \WP_Post ? $frame['args'][0]->ID : (int) $frame['args'][0];
-                return self::get_layout_data($pid);
+                return self::get_layout_data($pid, $status);
             }
         }
         return [];
     }
 
-    private static function save_current_data(array $data): void {
+    private static function save_current_data(array $data, string $status = 'draft'): void {
         global $post;
         if (isset($post) && $post instanceof \WP_Post) {
-            self::update_layout_data($post->ID, $data);
+            self::update_layout_data($post->ID, $data, $status);
             return;
         }
         $backtrace = debug_backtrace(0, 5);
         foreach ($backtrace as $frame) {
             if (isset($frame['args'][0]) && is_numeric($frame['args'][0])) {
-                self::update_layout_data((int) $frame['args'][0], $data);
+                self::update_layout_data((int) $frame['args'][0], $data, $status);
                 return;
             }
         }

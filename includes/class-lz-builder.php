@@ -97,7 +97,7 @@ final class LZ_Builder {
     static public function enqueue_frontend_assets(): void {
         if (is_singular()) {
             $post_id = get_the_ID();
-            if ($post_id && LZ_Page_Data::has_builder_data($post_id)) {
+            if ($post_id && (LZ_Page_Data::has_builder_data($post_id) || !empty(LZ_Page_Data::get_layout_data($post_id, 'draft')))) {
                 wp_enqueue_style('lz-builder-frontend');
             }
         }
@@ -108,10 +108,20 @@ final class LZ_Builder {
             return $content;
         }
         $post_id = get_the_ID();
-        if (!LZ_Page_Data::has_builder_data($post_id)) {
+
+        // In preview mode, render the draft content.
+        $is_preview = isset($_GET['lz_builder_preview']);
+        $status = $is_preview ? 'draft' : 'published';
+
+        if (!$is_preview && !LZ_Page_Data::has_builder_data($post_id)) {
             return $content;
         }
-        return LZ_Page_Data::get_builder_content($post_id) . $content;
+
+        $builder_html = LZ_Page_Data::get_builder_content($post_id, $status);
+        if (empty($builder_html) && !$is_preview) {
+            return $content;
+        }
+        return $builder_html;
     }
 
     static public function load_builder_template(string $template): string {

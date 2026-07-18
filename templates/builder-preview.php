@@ -7,7 +7,6 @@ add_filter('body_class', function ($classes) {
     return $classes;
 });
 
-// Ensure frontend module CSS is loaded in the preview iframe.
 add_action('wp_enqueue_scripts', function () {
     if (wp_style_is('lz-builder-frontend', 'registered')) {
         wp_enqueue_style('lz-builder-frontend');
@@ -15,6 +14,16 @@ add_action('wp_enqueue_scripts', function () {
 }, 999);
 
 get_header(); ?>
+<style>
+.lz-node-overlay {
+    pointer-events: none;
+    position: absolute;
+    z-index: 999;
+    border: 2px solid #6366f1;
+    border-radius: 4px;
+    display: none;
+}
+</style>
 <div id="lz-builder-node-overlay" class="lz-node-overlay"></div>
 <div class="lz-builder-content-area" id="lz-builder-content-area">
     <?php
@@ -29,7 +38,6 @@ get_header(); ?>
     var contentArea = document.getElementById('lz-builder-content-area');
     var overlay = document.getElementById('lz-builder-node-overlay');
     var selectedNodeId = null;
-
     var parentOrigin = window.location.origin;
 
     window.addEventListener('message', function(event) {
@@ -55,40 +63,32 @@ get_header(); ?>
         }
     });
 
-    // Click on any module node to open its settings.
     function bindModuleClickEvents() {
         var nodes = contentArea.querySelectorAll('[data-node-id]');
         for (var i = 0; i < nodes.length; i++) {
             (function(el) {
-                // Prevent duplicate listeners.
                 if (el._lzBound) return;
                 el._lzBound = true;
 
                 el.style.cursor = 'pointer';
+
                 el.addEventListener('click', function(e) {
                     e.stopPropagation();
                     var nodeId = this.getAttribute('data-node-id');
                     selectedNodeId = nodeId;
 
-                    // Show selection overlay.
-                    var rect = this.getBoundingClientRect();
                     if (overlay) {
+                        var r = this.getBoundingClientRect();
                         overlay.style.display = 'block';
-                        overlay.style.top = rect.top + 'px';
-                        overlay.style.left = rect.left + 'px';
-                        overlay.style.width = rect.width + 'px';
-                        overlay.style.height = rect.height + 'px';
+                        overlay.style.top  = (r.top  + window.scrollY) + 'px';
+                        overlay.style.left = (r.left + window.scrollX) + 'px';
+                        overlay.style.width  = r.width  + 'px';
+                        overlay.style.height = r.height + 'px';
                     }
 
                     window.parent.postMessage({
                         action: 'lz_open_settings',
                         node_id: nodeId,
-                        rect: {
-                            top: rect.top,
-                            left: rect.left,
-                            width: rect.width,
-                            height: rect.height
-                        }
                     }, parentOrigin);
                 });
 
@@ -106,7 +106,6 @@ get_header(); ?>
         }
     }
 
-    // Initial binding.
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindModuleClickEvents);
     } else {
