@@ -1,0 +1,1 @@
+<input type="text" class="lz-field lz-field-suggest" data-field-key="<?php echo esc_attr( $field_key ); ?>" value="<?php echo esc_attr( $field_value ); ?>" placeholder="<?php echo isset( $field['placeholder'] ) ? esc_attr( $field['placeholder'] ) : ''; ?>" data-suggest-action="<?php echo isset( $field['action'] ) ? esc_attr( $field['action'] ) : ''; ?>">

@@ -1,0 +1,1 @@
+<textarea class="lz-field lz-field-raw" data-field-key="<?php echo esc_attr( $field_key ); ?>" rows="8" style="font-family:monospace;width:100%;"><?php echo esc_textarea( $field_value ); ?></textarea>

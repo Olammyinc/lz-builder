@@ -1,0 +1,13 @@
+.lz-row {
+  position: relative;
+}
+
+.lz-row-fixed > .lz-col-group {
+  max-width: 1170px;
+  margin: 0 auto;
+}
+
+.lz-col-group {
+  display: flex;
+  flex-wrap: wrap;
+}

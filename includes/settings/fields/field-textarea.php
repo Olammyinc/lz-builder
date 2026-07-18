@@ -1,0 +1,1 @@
+<textarea class="lz-field lz-field-textarea" data-field-key="<?php echo esc_attr( $field_key ); ?>" placeholder="<?php echo isset( $field['placeholder'] ) ? esc_attr( $field['placeholder'] ) : ''; ?>"><?php echo esc_textarea( $field_value ); ?></textarea>

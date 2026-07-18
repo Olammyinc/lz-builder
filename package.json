@@ -1,0 +1,19 @@
+{
+  "name": "lz-builder",
+  "version": "1.7.0",
+  "private": true,
+  "scripts": {
+    "build": "wp-scripts build && npm run build:css",
+    "start": "wp-scripts start",
+    "build:css": "sass assets/scss/lz-builder.scss:assets/css/build/lz-builder.css assets/scss/lz-builder-frontend.scss:assets/css/build/lz-builder-frontend.css assets/css/admin/lz-admin.scss:assets/css/build/lz-admin.css --style=compressed --no-source-map",
+    "lint:js": "wp-scripts lint-js",
+    "packages-update": "wp-scripts packages-update"
+  },
+  "dependencies": {
+    "@wordpress/api-fetch": "^6.55.0",
+    "@wordpress/element": "^5.35.0",
+    "@wordpress/i18n": "^4.58.0",
+    "@wordpress/scripts": "^27.9.0",
+    "sass": "^1.101.0"
+  }
+}

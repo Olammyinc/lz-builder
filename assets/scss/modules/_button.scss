@@ -1,0 +1,52 @@
+.lz-button-wrap {
+  margin: 8px 0;
+}
+
+.lz-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 600;
+  border: 2px solid transparent;
+  line-height: 1.4;
+}
+
+.lz-button:hover {
+  filter: brightness(1.1);
+  text-decoration: none;
+}
+
+.lz-button-small {
+  font-size: 13px;
+  padding: 8px 16px;
+}
+
+.lz-button-medium {
+  font-size: 15px;
+  padding: 12px 24px;
+}
+
+.lz-button-large {
+  font-size: 18px;
+  padding: 16px 32px;
+}
+
+.lz-button-flat {
+  border: none;
+}
+
+.lz-button-outlined {
+  background: transparent !important;
+  border-width: 2px;
+}
+
+.lz-button-gradient {
+  border: none;
+}
+
+.lz-button-full {
+  width: 100%;
+}

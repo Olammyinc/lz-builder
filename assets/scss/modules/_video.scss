@@ -1,0 +1,32 @@
+.lz-video {
+  margin: 8px 0;
+  position: relative;
+}
+
+.lz-video-wrap {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+.lz-video-wrap iframe,
+.lz-video-wrap video {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: none;
+}
+
+.lz-video-16-9 {
+  padding-bottom: 56.25%;
+}
+
+.lz-video-4-3 {
+  padding-bottom: 75%;
+}
+
+.lz-video-1-1 {
+  padding-bottom: 100%;
+}
