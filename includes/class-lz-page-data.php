@@ -29,8 +29,9 @@ class LZ_Page_Data {
             $data = is_array($decoded) ? $decoded : [];
         }
 
-        // Draft fallback: if no draft exists, use published data instead.
-        if ('draft' === $status && empty($data)) {
+        // Draft fallback: only when no draft meta has ever been saved.
+        // An explicitly empty draft ('[]') must not trigger the fallback.
+        if ('draft' === $status && '' === $raw) {
             return self::get_layout_data($post_id, 'published');
         }
 
@@ -51,7 +52,7 @@ class LZ_Page_Data {
         $ordered = self::sort_nodes($data);
         $html = '<div class="lz-builder-content">';
         foreach ($ordered as $node) {
-            if ('row' === $node['type'] && !$node['parent_id']) {
+            if ('row' === $node['type'] && empty($node['parent_id'])) {
                 $html .= self::render_row($node, $data);
             }
         }
@@ -274,6 +275,15 @@ class LZ_Page_Data {
 
             if ($old_id === $node_id) {
                 $new_root_id = $new_id;
+                // Position clone after the original among siblings.
+                $max_pos = 0;
+                $clone_parent = $original['parent_id'] ?? '';
+                foreach ($data as $n) {
+                    if (($n['parent_id'] ?? '') === $clone_parent && isset($n['position'])) {
+                        $max_pos = max($max_pos, (int) $n['position']);
+                    }
+                }
+                $new_node['position'] = $max_pos + 1;
             }
         }
 

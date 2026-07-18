@@ -52,7 +52,10 @@ final class LZ_Builder {
     }
 
     static public function is_builder_active(): bool {
-        return isset($_GET['lz_builder']) && current_user_can('edit_posts');
+        if (!isset($_GET['lz_builder'])) return false;
+        $post_id = get_queried_object_id();
+        if ($post_id && !current_user_can('edit_post', $post_id)) return false;
+        return current_user_can('edit_posts');
     }
 
     static public function init_ui(): void {
@@ -109,8 +112,10 @@ final class LZ_Builder {
         }
         $post_id = get_the_ID();
 
-        // In preview mode, render the draft content.
         $is_preview = isset($_GET['lz_builder_preview']);
+        if ($is_preview && !current_user_can('edit_post', $post_id)) {
+            return $content;
+        }
         $status = $is_preview ? 'draft' : 'published';
 
         if (!$is_preview && !LZ_Page_Data::has_builder_data($post_id)) {
@@ -129,7 +134,10 @@ final class LZ_Builder {
             return LZ_BUILDER_DIR . 'templates/builder-shell.php';
         }
         if (isset($_GET['lz_builder_preview'])) {
-            return LZ_BUILDER_DIR . 'templates/builder-preview.php';
+            $pid = get_queried_object_id();
+            if ($pid && current_user_can('edit_post', $pid)) {
+                return LZ_BUILDER_DIR . 'templates/builder-preview.php';
+            }
         }
         return $template;
     }

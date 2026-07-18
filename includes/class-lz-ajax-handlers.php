@@ -57,7 +57,11 @@ class LZ_AJAX_Handlers {
             register_rest_route('lz-builder/v1', '/' . $route, [
                 'methods'             => $args['methods'],
                 'callback'            => [self::class, $args['callback']],
-                'permission_callback' => function () {
+                'permission_callback' => function ($request) {
+                    $post_id = (int) $request->get_param('post_id');
+                    if ($post_id > 0) {
+                        return current_user_can('edit_post', $post_id);
+                    }
                     return current_user_can('edit_posts');
                 },
             ]);
@@ -77,8 +81,17 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => __('Invalid nonce.', 'lz-builder')]);
         }
         $post_id = self::get_post_id_from_request();
-        if ($post_id && !current_user_can('edit_post', $post_id)) {
+        if ($post_id <= 0) {
+            wp_send_json_error(['message' => __('Invalid post ID.', 'lz-builder')]);
+        }
+        if (!current_user_can('edit_post', $post_id)) {
             wp_send_json_error(['message' => __('Permission denied for this post.', 'lz-builder')]);
+        }
+    }
+
+    private static function check_basic_permissions(): void {
+        if (!self::verify_nonce()) {
+            wp_send_json_error(['message' => __('Invalid nonce.', 'lz-builder')]);
         }
         if (!current_user_can('edit_posts')) {
             wp_send_json_error(['message' => __('Permission denied.', 'lz-builder')]);
@@ -259,6 +272,9 @@ class LZ_AJAX_Handlers {
         $post_id = self::get_post_id_from_request();
 
         $node        = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
+        if (!$node) {
+            wp_send_json_error(['message' => __('Node not found.', 'lz-builder')]);
+        }
         $module_slug = $node->module ?? '';
         $module_obj  = $node && 'module' === $node->type && $module_slug
             ? LZ_Module_Registry::get_instance()->get_module($module_slug)
@@ -329,7 +345,19 @@ class LZ_AJAX_Handlers {
             ? (array) $node->settings
             : [];
 
-        // Build simple HTML settings form.
+        $html = self::build_settings_form_html($form, $current_settings, $node_id, $module_obj);
+
+        wp_send_json_success([
+            'html'     => $html,
+            'node_id'  => $node_id,
+            'settings' => $current_settings,
+        ]);
+    }
+
+    /**
+     * Shared settings-form HTML builder used by both AJAX and REST endpoints.
+     */
+    private static function build_settings_form_html(array $form, array $current_settings, string $node_id, $module_obj): string {
         $html = '<form class="lz-settings-form" id="lz-settings-form" data-node-id="' . esc_attr($node_id) . '">';
         $html .= '<div class="lz-settings-header">';
         $html .= '<h3 class="lz-settings-title">' . esc_html($module_obj->get_name()) . ' ' . __('Settings', 'lz-builder') . '</h3>';
@@ -415,42 +443,28 @@ class LZ_AJAX_Handlers {
                                 case 'typography':
                                     $typo_key = $field_key;
                                     $html .= '<div class="lz-field-typography">';
-                                    // Font family.
                                     $ff_val = $current_settings[$typo_key . '_font_family'] ?? '';
                                     $html .= '<label class="lz-field-sub-label">' . __('Font Family', 'lz-builder') . '</label>';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($typo_key . '_font_family') . '">';
                                     $font_families = [
-                                        '' => __('Default', 'lz-builder'),
-                                        'Arial, Helvetica, sans-serif' => 'Arial',
-                                        'Helvetica, Arial, sans-serif' => 'Helvetica',
-                                        'Georgia, serif' => 'Georgia',
-                                        'Times New Roman, serif' => 'Times New Roman',
-                                        'Verdana, Geneva, sans-serif' => 'Verdana',
-                                        'Trebuchet MS, sans-serif' => 'Trebuchet MS',
-                                        'Courier New, monospace' => 'Courier New',
-                                        'Impact, sans-serif' => 'Impact',
-                                        'Palatino Linotype, serif' => 'Palatino',
-                                        'Tahoma, Geneva, sans-serif' => 'Tahoma',
-                                        'Open Sans, sans-serif' => 'Open Sans',
-                                        'Roboto, sans-serif' => 'Roboto',
-                                        'Lato, sans-serif' => 'Lato',
-                                        'Montserrat, sans-serif' => 'Montserrat',
-                                        'Inter, sans-serif' => 'Inter',
-                                        'Poppins, sans-serif' => 'Poppins',
-                                        'Nunito, sans-serif' => 'Nunito',
-                                        'Raleway, sans-serif' => 'Raleway',
-                                        'Ubuntu, sans-serif' => 'Ubuntu',
-                                        'Merriweather, serif' => 'Merriweather',
-                                        'Playfair Display, serif' => 'Playfair Display',
-                                        'Source Sans Pro, sans-serif' => 'Source Sans Pro',
-                                        'system-ui, sans-serif' => 'System UI',
+                                        '' => __('Default', 'lz-builder'), 'Arial, Helvetica, sans-serif' => 'Arial',
+                                        'Helvetica, Arial, sans-serif' => 'Helvetica', 'Georgia, serif' => 'Georgia',
+                                        'Times New Roman, serif' => 'Times New Roman', 'Verdana, Geneva, sans-serif' => 'Verdana',
+                                        'Trebuchet MS, sans-serif' => 'Trebuchet MS', 'Courier New, monospace' => 'Courier New',
+                                        'Impact, sans-serif' => 'Impact', 'Palatino Linotype, serif' => 'Palatino',
+                                        'Tahoma, Geneva, sans-serif' => 'Tahoma', 'Open Sans, sans-serif' => 'Open Sans',
+                                        'Roboto, sans-serif' => 'Roboto', 'Lato, sans-serif' => 'Lato',
+                                        'Montserrat, sans-serif' => 'Montserrat', 'Inter, sans-serif' => 'Inter',
+                                        'Poppins, sans-serif' => 'Poppins', 'Nunito, sans-serif' => 'Nunito',
+                                        'Raleway, sans-serif' => 'Raleway', 'Ubuntu, sans-serif' => 'Ubuntu',
+                                        'Merriweather, serif' => 'Merriweather', 'Playfair Display, serif' => 'Playfair Display',
+                                        'Source Sans Pro, sans-serif' => 'Source Sans Pro', 'system-ui, sans-serif' => 'System UI',
                                     ];
                                     foreach ($font_families as $ff_css => $ff_label) {
                                         $ff_sel = $ff_val === $ff_css ? ' selected' : '';
                                         $html .= '<option value="' . esc_attr($ff_css) . '"' . $ff_sel . '>' . esc_html($ff_label) . '</option>';
                                     }
                                     $html .= '</select>';
-                                    // Font weight.
                                     $fw_val = $current_settings[$typo_key . '_font_weight'] ?? '';
                                     $html .= '<label class="lz-field-sub-label">' . __('Weight', 'lz-builder') . '</label>';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($typo_key . '_font_weight') . '">';
@@ -460,51 +474,35 @@ class LZ_AJAX_Handlers {
                                         $html .= '<option value="' . esc_attr($w) . '"' . $sel . '>' . esc_html($wl) . '</option>';
                                     }
                                     $html .= '</select>';
-                                    // Font size.
                                     $fs_val = $current_settings[$typo_key . '_font_size'] ?? '';
                                     $fs_unit = $current_settings[$typo_key . '_font_size_unit'] ?? 'px';
                                     $html .= '<label class="lz-field-sub-label">' . __('Font Size', 'lz-builder') . '</label>';
                                     $html .= '<div class="lz-field-unit-wrap">';
                                     $html .= '<input type="number" class="lz-field-input" name="' . esc_attr($typo_key . '_font_size') . '" value="' . esc_attr($fs_val) . '" step="any">';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($typo_key . '_font_size_unit') . '">';
-                                    foreach (['px', 'em', 'rem', 'vw'] as $u) {
-                                        $sel = $fs_unit === $u ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>';
-                                    }
+                                    foreach (['px', 'em', 'rem', 'vw'] as $u) { $sel = $fs_unit === $u ? ' selected' : ''; $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>'; }
                                     $html .= '</select></div>';
-                                    // Line height.
                                     $lh_val = $current_settings[$typo_key . '_line_height'] ?? '';
                                     $lh_unit = $current_settings[$typo_key . '_line_height_unit'] ?? '';
                                     $html .= '<label class="lz-field-sub-label">' . __('Line Height', 'lz-builder') . '</label>';
                                     $html .= '<div class="lz-field-unit-wrap">';
                                     $html .= '<input type="number" class="lz-field-input" name="' . esc_attr($typo_key . '_line_height') . '" value="' . esc_attr($lh_val) . '" step="any">';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($typo_key . '_line_height_unit') . '">';
-                                    foreach (['' => __('None', 'lz-builder'), 'em' => 'em', 'px' => 'px', '%' => '%'] as $uv => $ul) {
-                                        $sel = $lh_unit === $uv ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($uv) . '"' . $sel . '>' . esc_html($ul) . '</option>';
-                                    }
+                                    foreach (['' => __('None', 'lz-builder'), 'em' => 'em', 'px' => 'px', '%' => '%'] as $uv => $ul) { $sel = $lh_unit === $uv ? ' selected' : ''; $html .= '<option value="' . esc_attr($uv) . '"' . $sel . '>' . esc_html($ul) . '</option>'; }
                                     $html .= '</select></div>';
-                                    // Text transform.
                                     $tt_val = $current_settings[$typo_key . '_text_transform'] ?? '';
                                     $html .= '<label class="lz-field-sub-label">' . __('Text Transform', 'lz-builder') . '</label>';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($typo_key . '_text_transform') . '">';
                                     $transforms = ['' => __('None', 'lz-builder'), 'uppercase' => __('Uppercase', 'lz-builder'), 'lowercase' => __('Lowercase', 'lz-builder'), 'capitalize' => __('Capitalize', 'lz-builder')];
-                                    foreach ($transforms as $tv => $tl) {
-                                        $sel = $tt_val === $tv ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($tv) . '"' . $sel . '>' . esc_html($tl) . '</option>';
-                                    }
+                                    foreach ($transforms as $tv => $tl) { $sel = $tt_val === $tv ? ' selected' : ''; $html .= '<option value="' . esc_attr($tv) . '"' . $sel . '>' . esc_html($tl) . '</option>'; }
                                     $html .= '</select>';
-                                    // Letter spacing.
                                     $ls_val = $current_settings[$typo_key . '_letter_spacing'] ?? '';
                                     $ls_unit = $current_settings[$typo_key . '_letter_spacing_unit'] ?? 'px';
                                     $html .= '<label class="lz-field-sub-label">' . __('Letter Spacing', 'lz-builder') . '</label>';
                                     $html .= '<div class="lz-field-unit-wrap">';
                                     $html .= '<input type="number" class="lz-field-input" name="' . esc_attr($typo_key . '_letter_spacing') . '" value="' . esc_attr($ls_val) . '" step="any">';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($typo_key . '_letter_spacing_unit') . '">';
-                                    foreach (['px', 'em'] as $u) {
-                                        $sel = $ls_unit === $u ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>';
-                                    }
+                                    foreach (['px', 'em'] as $u) { $sel = $ls_unit === $u ? ' selected' : ''; $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>'; }
                                     $html .= '</select></div>';
                                     $html .= '</div>';
                                     break;
@@ -512,29 +510,20 @@ class LZ_AJAX_Handlers {
                                 case 'border':
                                     $b_key = $field_key;
                                     $html .= '<div class="lz-field-border">';
-                                    // Style.
                                     $bs_val = $current_settings[$b_key . '_style'] ?? '';
                                     $html .= '<label class="lz-field-sub-label">' . __('Style', 'lz-builder') . '</label>';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($b_key . '_style') . '">';
                                     $styles = ['' => __('None', 'lz-builder'), 'solid' => __('Solid', 'lz-builder'), 'dashed' => __('Dashed', 'lz-builder'), 'dotted' => __('Dotted', 'lz-builder'), 'double' => __('Double', 'lz-builder')];
-                                    foreach ($styles as $sv => $sl) {
-                                        $sel = $bs_val === $sv ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($sv) . '"' . $sel . '>' . esc_html($sl) . '</option>';
-                                    }
+                                    foreach ($styles as $sv => $sl) { $sel = $bs_val === $sv ? ' selected' : ''; $html .= '<option value="' . esc_attr($sv) . '"' . $sel . '>' . esc_html($sl) . '</option>'; }
                                     $html .= '</select>';
-                                    // Width.
                                     $bw_val = $current_settings[$b_key . '_width'] ?? '';
                                     $bw_unit = $current_settings[$b_key . '_width_unit'] ?? 'px';
                                     $html .= '<label class="lz-field-sub-label">' . __('Width', 'lz-builder') . '</label>';
                                     $html .= '<div class="lz-field-unit-wrap">';
                                     $html .= '<input type="number" class="lz-field-input" name="' . esc_attr($b_key . '_width') . '" value="' . esc_attr($bw_val) . '" step="any">';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($b_key . '_width_unit') . '">';
-                                    foreach (['px', 'em'] as $u) {
-                                        $sel = $bw_unit === $u ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>';
-                                    }
+                                    foreach (['px', 'em'] as $u) { $sel = $bw_unit === $u ? ' selected' : ''; $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>'; }
                                     $html .= '</select></div>';
-                                    // Color.
                                     $bc_val = $current_settings[$b_key . '_color'] ?? '';
                                     $html .= '<label class="lz-field-sub-label">' . __('Color', 'lz-builder') . '</label>';
                                     $bc_hex = !empty($bc_val) ? $bc_val : '#8899aa';
@@ -542,19 +531,14 @@ class LZ_AJAX_Handlers {
                                     $html .= '<input type="text" class="lz-field-input lz-field-color-text" name="' . esc_attr($b_key . '_color') . '" value="' . esc_attr($bc_val) . '" placeholder="#000000">';
                                     $html .= '<span class="lz-color-swatch" style="background-color:' . esc_attr($bc_hex) . '" data-color="' . esc_attr($bc_hex) . '" tabindex="0" role="button" aria-label="' . esc_attr__('Pick color', 'lz-builder') . '">';
                                     $html .= '<input type="color" class="lz-field-color-native" value="' . esc_attr($bc_val) . '">';
-                                    $html .= '</span>';
-                                    $html .= '</div>';
-                                    // Radius.
+                                    $html .= '</span></div>';
                                     $br_val = $current_settings[$b_key . '_radius'] ?? '';
                                     $br_unit = $current_settings[$b_key . '_radius_unit'] ?? 'px';
                                     $html .= '<label class="lz-field-sub-label">' . __('Radius', 'lz-builder') . '</label>';
                                     $html .= '<div class="lz-field-unit-wrap">';
                                     $html .= '<input type="number" class="lz-field-input" name="' . esc_attr($b_key . '_radius') . '" value="' . esc_attr($br_val) . '" step="any">';
                                     $html .= '<select class="lz-field-select" name="' . esc_attr($b_key . '_radius_unit') . '">';
-                                    foreach (['px', '%', 'em'] as $u) {
-                                        $sel = $br_unit === $u ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>';
-                                    }
+                                    foreach (['px', '%', 'em'] as $u) { $sel = $br_unit === $u ? ' selected' : ''; $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>'; }
                                     $html .= '</select></div>';
                                     $html .= '</div>';
                                     break;
@@ -565,7 +549,6 @@ class LZ_AJAX_Handlers {
                                     $d_linked = !empty($current_settings[$d_key . '_linked']);
                                     $html .= '<div class="lz-field-dimension">';
                                     $html .= '<label class="lz-field-sub-label">' . esc_html($field['label'] ?? $field_key) . '</label>';
-                                    // Linked toggle.
                                     $html .= '<label class="lz-field-inline-label"><input type="checkbox" class="lz-field-checkbox" name="' . esc_attr($d_key . '_linked') . '" value="1"' . ($d_linked ? ' checked' : '') . '> ' . __('Link all sides', 'lz-builder') . '</label>';
                                     $sides = ['top' => __('Top', 'lz-builder'), 'right' => __('Right', 'lz-builder'), 'bottom' => __('Bottom', 'lz-builder'), 'left' => __('Left', 'lz-builder')];
                                     $html .= '<div class="lz-dimension-grid">';
@@ -575,12 +558,8 @@ class LZ_AJAX_Handlers {
                                         $html .= '<input type="number" class="lz-field-input" name="' . esc_attr($d_key . '_' . $side) . '" value="' . esc_attr($sd_val) . '" step="any"></div>';
                                     }
                                     $html .= '</div>';
-                                    // Unit.
                                     $html .= '<select class="lz-field-select lz-dimension-unit" name="' . esc_attr($d_key . '_unit') . '">';
-                                    foreach (['px', 'em', '%', 'rem', 'vw', 'vh'] as $u) {
-                                        $sel = $d_unit === $u ? ' selected' : '';
-                                        $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>';
-                                    }
+                                    foreach (['px', 'em', '%', 'rem', 'vw', 'vh'] as $u) { $sel = $d_unit === $u ? ' selected' : ''; $html .= '<option value="' . esc_attr($u) . '"' . $sel . '>' . esc_html($u) . '</option>'; }
                                     $html .= '</select>';
                                     $html .= '</div>';
                                     break;
@@ -635,11 +614,7 @@ class LZ_AJAX_Handlers {
         $html .= '</div>';
         $html .= '</form>';
 
-        wp_send_json_success([
-            'html'     => $html,
-            'node_id'  => $node_id,
-            'settings' => $current_settings,
-        ]);
+        return $html;
     }
 
     public static function render_node(): void {
@@ -651,7 +626,7 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
         }
 
-        $node = LZ_Page_Data::get_node($node_id, $post_id);
+        $node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
         if (!$node) {
             wp_send_json_error(['message' => __('Node not found.', 'lz-builder')]);
         }
@@ -671,7 +646,7 @@ class LZ_AJAX_Handlers {
     }
 
     public static function get_templates(): void {
-        self::check_permissions();
+        self::check_basic_permissions();
         $args = [
             'post_type'      => 'lz_template',
             'posts_per_page' => -1,
@@ -729,7 +704,7 @@ class LZ_AJAX_Handlers {
     }
 
     public static function search_modules(): void {
-        self::check_permissions();
+        self::check_basic_permissions();
         $search  = isset($_REQUEST['search']) ? sanitize_text_field(wp_unslash($_REQUEST['search'])) : '';
         $modules = LZ_Module_Registry::get_instance()->get_all_modules();
         $results = [];
@@ -862,6 +837,9 @@ class LZ_AJAX_Handlers {
         }
 
         $node        = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
+        if (!$node) {
+            return new \WP_REST_Response(['success' => false, 'message' => __('Node not found.', 'lz-builder')], 404);
+        }
         $module_slug = $node->module ?? '';
         $module_obj  = LZ_Module_Registry::get_instance()->get_module($module_slug);
 
@@ -916,10 +894,12 @@ class LZ_AJAX_Handlers {
             return new \WP_REST_Response(['success' => false, 'message' => __('Module not found.', 'lz-builder')], 404);
         }
 
-        // Delegate to the inline renderer for settings forms.
-        ob_start();
-        self::render_settings_form_for_node($node, $module_obj, intval($post_id));
-        $html = ob_get_clean();
+        // Delegate to the shared settings-form HTML builder.
+        $form = $module_obj->get_settings_form();
+        $current_settings = isset($node->settings) && is_object($node->settings)
+            ? (array) $node->settings
+            : [];
+        $html = self::build_settings_form_html($form, $current_settings, $node_id, $module_obj);
 
         return new \WP_REST_Response(['success' => true, 'html' => $html, 'node_id' => $node_id], 200);
     }
