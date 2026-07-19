@@ -47,6 +47,14 @@ Templates are `lz_template` custom posts. They appear in the Templates tab insid
 
 == Changelog ==
 
+= 1.8.0 =
+* Tier 0: Client-side settings model replaces dangerouslySetInnerHTML
+* 27 React field components in src/fields/ registry
+* get_settings_schema AJAX + REST endpoints
+* SettingsPanel renders from JSON schema, not raw HTML
+* Preview hints (css/render) for future live preview
+* render_settings_form preserved as server-rendered fallback
+
 = 1.7.2 =
 * Notifications are now fixed-position toast popups (no more layout push)
 * Row layout icons show column-count visual blocks
