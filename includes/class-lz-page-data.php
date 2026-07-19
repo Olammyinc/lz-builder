@@ -271,11 +271,9 @@ class LZ_Page_Data {
             if ($new_node['parent_id'] && isset($node_map[$new_node['parent_id']])) {
                 $new_node['parent_id'] = $node_map[$new_node['parent_id']];
             }
-            $data[] = $new_node;
 
             if ($old_id === $node_id) {
                 $new_root_id = $new_id;
-                // Position clone after the original among siblings.
                 $max_pos = 0;
                 $clone_parent = $original['parent_id'] ?? '';
                 foreach ($data as $n) {
@@ -285,6 +283,8 @@ class LZ_Page_Data {
                 }
                 $new_node['position'] = $max_pos + 1;
             }
+
+            $data[] = $new_node;
         }
 
         if ($post_id > 0) {

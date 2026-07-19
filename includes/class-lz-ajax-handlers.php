@@ -147,7 +147,8 @@ class LZ_AJAX_Handlers {
         $layout   = isset($_POST['layout']) ? sanitize_text_field(wp_unslash($_POST['layout'])) : '1-col';
         $position = isset($_POST['position']) ? (int) $_POST['position'] : 0;
         $row_id   = LZ_Page_Data::add_row($post_id, $layout, $position, 'draft');
-        wp_send_json_success(['node_id' => $row_id, 'message' => __('Row added.', 'lz-builder')]);
+        $layout_html = self::get_layout_html_safe($post_id);
+        wp_send_json_success(['node_id' => $row_id, 'layout' => $layout_html, 'message' => __('Row added.', 'lz-builder')]);
     }
 
     // ---- Module ----
@@ -229,7 +230,8 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
         }
         LZ_Page_Data::delete_node($node_id, $post_id, 'draft');
-        wp_send_json_success(['message' => __('Node deleted.', 'lz-builder')]);
+        $layout_html = self::get_layout_html_safe($post_id);
+        wp_send_json_success(['message' => __('Node deleted.', 'lz-builder'), 'layout' => $layout_html]);
     }
 
     public static function move_node(): void {
@@ -255,7 +257,8 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
         }
         $new_id = LZ_Page_Data::duplicate_node($node_id, $post_id, 'draft');
-        wp_send_json_success(['node_id' => $new_id, 'message' => __('Node duplicated.', 'lz-builder')]);
+        $layout_html = self::get_layout_html_safe($post_id);
+        wp_send_json_success(['node_id' => $new_id, 'layout' => $layout_html, 'message' => __('Node duplicated.', 'lz-builder')]);
     }
 
     // ---- Settings ----
@@ -615,6 +618,18 @@ class LZ_AJAX_Handlers {
         $html .= '</form>';
 
         return $html;
+    }
+
+    /**
+     * Safely get layout HTML for preview updates after mutations.
+     */
+    private static function get_layout_html_safe(int $post_id): string {
+        try {
+            return LZ_Page_Data::get_builder_content($post_id, 'draft');
+        } catch (\Throwable $e) {
+            error_log('[Lz Builder] Layout HTML error: ' . $e->getMessage());
+            return '';
+        }
     }
 
     public static function render_node(): void {

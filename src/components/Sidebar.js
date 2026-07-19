@@ -36,6 +36,7 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 		if ( ! nodeId ) return;
 		lzFetch( 'delete_node', { node_id: nodeId } ).then( ( r ) => {
 			if ( r && r.success ) {
+				if ( r.data && r.data.layout ) updatePreview( r.data.layout );
 				showNotice( 'Node deleted.', 'success' );
 				dispatch( { type: 'SET_UNSAVED', value: true } );
 				dispatch( { type: 'BACK_TO_MODULES' } );
@@ -44,13 +45,14 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 				showNotice( ( r && r.data && r.data.message ) || 'Could not delete node.', 'error' );
 			}
 		} );
-	}, [ state.editingNodeId, showNotice, dispatch, refreshLayout ] );
+	}, [ state.editingNodeId, showNotice, dispatch, refreshLayout, updatePreview ] );
 
 	const handleDuplicateNode = useCallback( () => {
 		const nodeId = state.editingNodeId;
 		if ( ! nodeId ) return;
 		lzFetch( 'duplicate_node', { node_id: nodeId } ).then( ( r ) => {
 			if ( r && r.success ) {
+				if ( r.data && r.data.layout ) updatePreview( r.data.layout );
 				showNotice( 'Node duplicated.', 'success' );
 				dispatch( { type: 'SET_UNSAVED', value: true } );
 				refreshLayout();
@@ -58,11 +60,12 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 				showNotice( ( r && r.data && r.data.message ) || 'Could not duplicate.', 'error' );
 			}
 		} );
-	}, [ state.editingNodeId, showNotice, dispatch, refreshLayout ] );
+	}, [ state.editingNodeId, showNotice, dispatch, refreshLayout, updatePreview ] );
 
 	const handleAddRow = useCallback( ( layout ) => {
 		lzFetch( 'add_row', { layout } ).then( ( r ) => {
 			if ( r && r.success ) {
+				if ( r.data && r.data.layout ) updatePreview( r.data.layout );
 				showNotice( 'Row added!', 'success' );
 				dispatch( { type: 'SET_UNSAVED', value: true } );
 				refreshLayout();
@@ -70,7 +73,7 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 				showNotice( ( r && r.data && r.data.message ) || 'Could not add row.', 'error' );
 			}
 		} );
-	}, [ showNotice, dispatch, refreshLayout ] );
+	}, [ showNotice, dispatch, refreshLayout, updatePreview ] );
 
 	const renderContent = () => {
 		switch ( state.activeTab ) {

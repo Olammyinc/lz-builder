@@ -698,8 +698,8 @@ body.lz-builder-active {
 }
 
 /* Layout panel wrappers */
-.lz-modules-panel { height: 100%; }
-.lz-module-list { height: 100%; overflow-y: auto; }
+.lz-modules-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.lz-module-list { flex: 1; overflow-y: auto; min-height: 0; }
 .lz-templates-panel { height: 100%; }
 .lz-template-item {
     display: flex;

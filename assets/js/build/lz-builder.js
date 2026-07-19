@@ -161,10 +161,28 @@ function App({
           nodeId: event.data.node_id
         });
       }
+      if (event.data.action === 'lz_column_drop' && event.data.module) {
+        (0,_api__WEBPACK_IMPORTED_MODULE_2__.lzFetch)('add_module', {
+          module: event.data.module,
+          parent_id: event.data.parent_id
+        }).then(r => {
+          if (r && r.success) {
+            if (r.data && r.data.layout) updatePreview(r.data.layout);
+            dispatch({
+              type: 'SET_UNSAVED',
+              value: true
+            });
+            showNotice('Module added!', 'success');
+            refreshLayout();
+          } else {
+            showNotice(r && r.data && r.data.message || 'Could not add module.', 'error');
+          }
+        });
+      }
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [updatePreview, refreshLayout, showNotice]);
   return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-builder-root-inner'
   }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)(_Notices__WEBPACK_IMPORTED_MODULE_6__["default"], {
@@ -294,13 +312,33 @@ const ICONS = {
   row: '\u2B1C',
   column: '\u25AD'
 };
+const ROW_LAYOUTS = [{
+  key: '1-col',
+  label: '1 Col'
+}, {
+  key: '2-cols',
+  label: '2 Cols'
+}, {
+  key: '3-cols',
+  label: '3 Cols'
+}, {
+  key: '4-cols',
+  label: '4 Cols'
+}, {
+  key: 'left-sidebar',
+  label: 'Left Sidebar'
+}, {
+  key: 'right-sidebar',
+  label: 'Right Sidebar'
+}];
 function ModuleList({
   modules,
   lockedModules,
   showNotice,
   updatePreview,
   dispatch,
-  refreshLayout
+  refreshLayout,
+  handleAddRow
 }) {
   const [search, setSearch] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)('');
   const handleAddModule = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(slug => {
@@ -351,6 +389,28 @@ function ModuleList({
     value: search,
     onInput: e => setSearch(e.target.value)
   })), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+    className: 'lz-module-category'
+  }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+    className: 'lz-module-category-title'
+  }, 'Rows'), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+    className: 'lz-module-grid'
+  }, ...ROW_LAYOUTS.map(rl => (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+    key: rl.key,
+    className: 'lz-module-card',
+    tabIndex: 0,
+    role: 'button',
+    onClick: () => handleAddRow && handleAddRow(rl.key),
+    onKeyDown: e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleAddRow && handleAddRow(rl.key);
+      }
+    }
+  }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+    className: 'lz-module-card-icon'
+  }, '\u2B1C'), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+    className: 'lz-module-card-name'
+  }, rl.label))))), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-module-list'
   }, ...filtered.map(cat => (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     key: cat.slug,
@@ -706,6 +766,7 @@ function Sidebar({
       node_id: nodeId
     }).then(r => {
       if (r && r.success) {
+        if (r.data && r.data.layout) updatePreview(r.data.layout);
         showNotice('Node deleted.', 'success');
         dispatch({
           type: 'SET_UNSAVED',
@@ -719,7 +780,43 @@ function Sidebar({
         showNotice(r && r.data && r.data.message || 'Could not delete node.', 'error');
       }
     });
-  }, [state.editingNodeId, showNotice, dispatch, refreshLayout]);
+  }, [state.editingNodeId, showNotice, dispatch, refreshLayout, updatePreview]);
+  const handleDuplicateNode = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    const nodeId = state.editingNodeId;
+    if (!nodeId) return;
+    (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('duplicate_node', {
+      node_id: nodeId
+    }).then(r => {
+      if (r && r.success) {
+        if (r.data && r.data.layout) updatePreview(r.data.layout);
+        showNotice('Node duplicated.', 'success');
+        dispatch({
+          type: 'SET_UNSAVED',
+          value: true
+        });
+        refreshLayout();
+      } else {
+        showNotice(r && r.data && r.data.message || 'Could not duplicate.', 'error');
+      }
+    });
+  }, [state.editingNodeId, showNotice, dispatch, refreshLayout, updatePreview]);
+  const handleAddRow = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(layout => {
+    (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('add_row', {
+      layout
+    }).then(r => {
+      if (r && r.success) {
+        if (r.data && r.data.layout) updatePreview(r.data.layout);
+        showNotice('Row added!', 'success');
+        dispatch({
+          type: 'SET_UNSAVED',
+          value: true
+        });
+        refreshLayout();
+      } else {
+        showNotice(r && r.data && r.data.message || 'Could not add row.', 'error');
+      }
+    });
+  }, [showNotice, dispatch, refreshLayout, updatePreview]);
   const renderContent = () => {
     switch (state.activeTab) {
       case 'modules':
@@ -729,7 +826,8 @@ function Sidebar({
           showNotice,
           updatePreview,
           dispatch,
-          refreshLayout
+          refreshLayout,
+          handleAddRow
         });
       case 'templates':
         return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)(_TemplateList__WEBPACK_IMPORTED_MODULE_3__["default"], {
@@ -745,7 +843,10 @@ function Sidebar({
         }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('button', {
           className: 'lz-btn lz-btn-danger',
           onClick: handleDeleteNode
-        }, 'Delete Module')), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)(_SettingsPanel__WEBPACK_IMPORTED_MODULE_4__["default"], {
+        }, 'Delete'), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('button', {
+          className: 'lz-btn lz-btn-save',
+          onClick: handleDuplicateNode
+        }, 'Duplicate')), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)(_SettingsPanel__WEBPACK_IMPORTED_MODULE_4__["default"], {
           nodeId: state.editingNodeId,
           showNotice,
           postToIframe,
