@@ -204,6 +204,7 @@ class LZ_AJAX_Handlers {
             'node_id'      => $node_id,
             'html'         => $rendered_html,
             'parent_id'    => $parent_id,
+            'layout'       => self::get_layout_html_safe($post_id),
             'render_error' => $render_error,
             'message'      => __('Module added.', 'lz-builder'),
         ]);

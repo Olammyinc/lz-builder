@@ -94,7 +94,7 @@ class LZ_Page_Data {
             foreach ($group_children as $col) {
                 $col_settings = isset($col['settings']) ? (object) $col['settings'] : new \stdClass();
                 $size = $col_settings->size ?? $col_settings->width ?? 100;
-                $html .= '<div class="lz-column lz-col-' . intval($size) . '" style="width:' . floatval($size) . '%">';
+                $html .= '<div class="lz-column lz-col-' . intval($size) . '" data-node="' . esc_attr($col['node_id']) . '" style="width:' . floatval($size) . '%">';
                 $modules = self::filter_nodes_by_type($all_nodes, 'module', $col['node_id']);
                 foreach ($modules as $mod) {
                     $html .= self::render_module_node($mod);

@@ -61,7 +61,7 @@ if ($border_radius !== '' && $border_radius !== null) {
     $col_style .= 'border-radius:' . esc_attr($border_radius . $border_radius_unit) . ';';
 }
 ?>
-<div class="lz-column lz-col-<?php echo esc_attr($size); ?> <?php echo esc_attr($node_class); ?>" style="<?php echo esc_attr($col_style); ?>">
+<div class="lz-column lz-col-<?php echo esc_attr($size); ?> <?php echo esc_attr($node_class); ?>" data-node="<?php echo esc_attr($node->node_id); ?>" style="<?php echo esc_attr($col_style); ?>">
     <?php
     $modules = LZ_Page_Data::get_nodes_by_type('module', $node->node_id);
     foreach ($modules as $mod_node) {
