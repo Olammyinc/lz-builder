@@ -4,7 +4,7 @@ Tags: page builder, drag and drop, frontend editor, subscription gating, wp ulti
 Requires at least: 5.9
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.7.1
+Stable tag: 1.7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -46,6 +46,12 @@ Set the `required_plan` property on your module class extending `LZ_Module_Base`
 Templates are `lz_template` custom posts. They appear in the Templates tab inside the builder and can be applied to any page.
 
 == Changelog ==
+
+= 1.7.2 =
+* Notifications are now fixed-position toast popups (no more layout push)
+* Row layout icons show column-count visual blocks
+* Add-module uses instant append-to-column (single DOM op, no full re-render)
+* Drag-and-drop now sends modules to the correct column in preview
 
 = 1.7.1 =
 * Draft isolation — all edits write to draft, Publish promotes server-side

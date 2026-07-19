@@ -215,6 +215,7 @@ function App({
     data,
     updatePreview,
     showNotice,
+    postToIframe,
     iframeRef,
     dispatch,
     refreshLayout,
@@ -243,6 +244,7 @@ function Canvas({
   data,
   updatePreview,
   showNotice,
+  postToIframe,
   iframeRef,
   dispatch,
   refreshLayout,
@@ -257,7 +259,15 @@ function Canvas({
         module: slug
       }).then(r => {
         if (r && r.success) {
-          if (r.data && r.data.layout) updatePreview(r.data.layout);
+          if (r.data && r.data.html && r.data.parent_id) {
+            postToIframe({
+              action: 'lz_append_to_column',
+              column_id: r.data.parent_id,
+              html: r.data.html
+            });
+          } else if (r.data && r.data.layout) {
+            updatePreview(r.data.layout);
+          }
           dispatch({
             type: 'SET_UNSAVED',
             value: true
@@ -269,7 +279,7 @@ function Canvas({
         }
       });
     }
-  }, [updatePreview, showNotice, dispatch, refreshLayout]);
+  }, [updatePreview, showNotice, postToIframe, dispatch, refreshLayout]);
   const handleDragOver = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
