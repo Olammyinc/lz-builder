@@ -348,8 +348,17 @@ class LZ_Page_Data {
     public static function add_module(int $post_id, string $module_slug, string $parent_id, int $position = 0, string $status = 'draft'): string {
         $data = self::get_layout_data($post_id, $status);
 
-        // Auto-create a 1-col row only if the layout is completely empty.
-        if (empty($data)) {
+        // Check whether any column nodes exist at all.
+        $has_columns = false;
+        foreach ($data as $node) {
+            if (($node['type'] ?? '') === 'column') {
+                $has_columns = true;
+                break;
+            }
+        }
+
+        // Auto-create a 1-col row when no columns exist.
+        if (!$has_columns) {
             $row_id = self::add_row($post_id, '1-col', 0, $status);
             $data = self::get_layout_data($post_id, $status);
             $parent_id = '';
@@ -365,6 +374,17 @@ class LZ_Page_Data {
         $node_id = self::generate_node_id();
         $defaults = self::get_module_default_settings($module_slug);
 
+        // Auto-position: count existing siblings and append after them.
+        if ($position <= 0 && !empty($parent_id)) {
+            $sibling_count = 0;
+            foreach ($data as $n) {
+                if (($n['type'] ?? '') === 'module' && ($n['parent_id'] ?? '') === $parent_id) {
+                    $sibling_count++;
+                }
+            }
+            $position = $sibling_count + 1;
+        }
+
         $node = [
             'node_id'   => $node_id,
             'type'      => 'module',
@@ -379,19 +399,28 @@ class LZ_Page_Data {
     }
 
     /**
-     * Find the last column node ID in the layout (for appending modules).
+     * Find the last column node ID, walking rows→column-groups→columns
+     * in document order so placement is predictable.
      */
     public static function find_last_column(int $post_id, string $status = 'draft'): string {
-        $data = self::get_layout_data($post_id, $status);
-        $last = '';
-        $last_pos = -1;
-        foreach ($data as $node) {
-            if (($node['type'] ?? '') === 'column' && ($node['position'] ?? -1) > $last_pos) {
-                $last = $node['node_id'];
-                $last_pos = (int) $node['position'];
+        $data   = self::get_layout_data($post_id, $status);
+        $ordered = self::sort_nodes($data);
+
+        // columns with data-node-id attribute returned by serve calls
+        $last_column = '';
+
+        // The last column rendered in document order is in the
+        // last row's last column-group's last column.
+        // Walk the ordered output backwards since it's a tree walk
+        // and columns are leaves — the last column node in sorted
+        // order is the rightmost leaf.
+        foreach (array_reverse($ordered) as $node) {
+            if (($node['type'] ?? '') === 'column') {
+                $last_column = $node['node_id'];
+                break;
             }
         }
-        return $last;
+        return $last_column;
     }
 
     public static function get_node_settings(string $node_id, int $post_id = 0): ?\stdClass {

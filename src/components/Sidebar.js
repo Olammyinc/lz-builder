@@ -41,13 +41,36 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 				dispatch( { type: 'BACK_TO_MODULES' } );
 				refreshLayout();
 			} else {
-				showNotice(
-					( r && r.data && r.data.message ) || 'Could not delete node.',
-					'error'
-				);
+				showNotice( ( r && r.data && r.data.message ) || 'Could not delete node.', 'error' );
 			}
 		} );
 	}, [ state.editingNodeId, showNotice, dispatch, refreshLayout ] );
+
+	const handleDuplicateNode = useCallback( () => {
+		const nodeId = state.editingNodeId;
+		if ( ! nodeId ) return;
+		lzFetch( 'duplicate_node', { node_id: nodeId } ).then( ( r ) => {
+			if ( r && r.success ) {
+				showNotice( 'Node duplicated.', 'success' );
+				dispatch( { type: 'SET_UNSAVED', value: true } );
+				refreshLayout();
+			} else {
+				showNotice( ( r && r.data && r.data.message ) || 'Could not duplicate.', 'error' );
+			}
+		} );
+	}, [ state.editingNodeId, showNotice, dispatch, refreshLayout ] );
+
+	const handleAddRow = useCallback( ( layout ) => {
+		lzFetch( 'add_row', { layout } ).then( ( r ) => {
+			if ( r && r.success ) {
+				showNotice( 'Row added!', 'success' );
+				dispatch( { type: 'SET_UNSAVED', value: true } );
+				refreshLayout();
+			} else {
+				showNotice( ( r && r.data && r.data.message ) || 'Could not add row.', 'error' );
+			}
+		} );
+	}, [ showNotice, dispatch, refreshLayout ] );
 
 	const renderContent = () => {
 		switch ( state.activeTab ) {
@@ -59,6 +82,7 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 					updatePreview,
 					dispatch,
 					refreshLayout,
+					handleAddRow,
 				} );
 			case 'templates':
 				return createElement( TemplateList, {
@@ -73,7 +97,11 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 							createElement( 'button', {
 								className: 'lz-btn lz-btn-danger',
 								onClick: handleDeleteNode,
-							}, 'Delete Module' ),
+							}, 'Delete' ),
+							createElement( 'button', {
+								className: 'lz-btn lz-btn-save',
+								onClick: handleDuplicateNode,
+							}, 'Duplicate' ),
 						),
 					createElement( SettingsPanel, {
 						nodeId: state.editingNodeId,

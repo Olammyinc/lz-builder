@@ -4,7 +4,7 @@
  * Plugin URI: https://lzplugins.com
  * Description: A powerful frontend drag-and-drop page builder with subscription-based module gating.
  * Version: 1.7.1
- * Author: Lz Plugins
+ * Author: Ibrahim Olammy
  * Text Domain: lz-builder
  * Domain Path: /languages
  * Requires at least: 5.9

@@ -11,7 +11,16 @@ const ICONS = {
 	column: '\u25AD',
 };
 
-export default function ModuleList( { modules, lockedModules, showNotice, updatePreview, dispatch, refreshLayout } ) {
+const ROW_LAYOUTS = [
+	{ key: '1-col', label: '1 Col' },
+	{ key: '2-cols', label: '2 Cols' },
+	{ key: '3-cols', label: '3 Cols' },
+	{ key: '4-cols', label: '4 Cols' },
+	{ key: 'left-sidebar', label: 'Left Sidebar' },
+	{ key: 'right-sidebar', label: 'Right Sidebar' },
+];
+
+export default function ModuleList( { modules, lockedModules, showNotice, updatePreview, dispatch, refreshLayout, handleAddRow } ) {
 	const [ search, setSearch ] = useState( '' );
 
 	const handleAddModule = useCallback( ( slug ) => {
@@ -68,6 +77,29 @@ export default function ModuleList( { modules, lockedModules, showNotice, update
 				value: search,
 				onInput: ( e ) => setSearch( e.target.value ),
 			} ),
+		),
+		createElement( 'div', { className: 'lz-module-category' },
+			createElement( 'div', { className: 'lz-module-category-title' }, 'Rows' ),
+			createElement( 'div', { className: 'lz-module-grid' },
+				...ROW_LAYOUTS.map( ( rl ) =>
+					createElement( 'div', {
+						key: rl.key,
+						className: 'lz-module-card',
+						tabIndex: 0,
+						role: 'button',
+						onClick: () => handleAddRow && handleAddRow( rl.key ),
+						onKeyDown: ( e ) => {
+							if ( e.key === 'Enter' || e.key === ' ' ) {
+								e.preventDefault();
+								handleAddRow && handleAddRow( rl.key );
+							}
+						},
+					},
+						createElement( 'div', { className: 'lz-module-card-icon' }, '\u2B1C' ),
+						createElement( 'div', { className: 'lz-module-card-name' }, rl.label ),
+					)
+				),
+			),
 		),
 		createElement( 'div', { className: 'lz-module-list' },
 			...filtered.map( ( cat ) =>

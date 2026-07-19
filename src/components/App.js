@@ -70,10 +70,22 @@ export default function App( { data } ) {
 			if ( event.data.action === 'lz_open_settings' && event.data.node_id ) {
 				dispatch( { type: 'EDIT_NODE', nodeId: event.data.node_id } );
 			}
+			if ( event.data.action === 'lz_column_drop' && event.data.module ) {
+				lzFetch( 'add_module', { module: event.data.module, parent_id: event.data.parent_id } ).then( ( r ) => {
+					if ( r && r.success ) {
+						if ( r.data && r.data.layout ) updatePreview( r.data.layout );
+						dispatch( { type: 'SET_UNSAVED', value: true } );
+						showNotice( 'Module added!', 'success' );
+						refreshLayout();
+					} else {
+						showNotice( ( r && r.data && r.data.message ) || 'Could not add module.', 'error' );
+					}
+				} );
+			}
 		}
 		window.addEventListener( 'message', handleMessage );
 		return () => window.removeEventListener( 'message', handleMessage );
-	}, [] );
+	}, [ updatePreview, refreshLayout, showNotice ] );
 
 	return createElement( 'div', { className: 'lz-builder-root-inner' },
 		createElement( Notices, { notices: state.notices, dispatch } ),

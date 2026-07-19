@@ -23,6 +23,13 @@ get_header(); ?>
     border-radius: 4px;
     display: none;
 }
+.lz-column-drop {
+    transition: outline 0.15s ease;
+}
+.lz-column-drop--active {
+    outline: 2px dashed #6366f1;
+    outline-offset: 2px;
+}
 </style>
 <div id="lz-builder-node-overlay" class="lz-node-overlay"></div>
 <div class="lz-builder-content-area" id="lz-builder-content-area">
@@ -47,6 +54,7 @@ get_header(); ?>
         if (event.data.action === 'lz_render_layout' && contentArea && event.data.html) {
             contentArea.innerHTML = event.data.html;
             bindModuleClickEvents();
+            bindColumnDropTargets();
         }
 
         if (event.data.action === 'lz_replace_module' && event.data.node_id && event.data.html) {
@@ -58,10 +66,49 @@ get_header(); ?>
                 if (newEl) {
                     oldModule.parentNode.replaceChild(newEl, oldModule);
                     bindModuleClickEvents();
+                    bindColumnDropTargets();
                 }
             }
         }
     });
+
+    // Per-column drop targets so the parent sends parent_id/position.
+    function bindColumnDropTargets() {
+        var cols = contentArea.querySelectorAll('.lz-column');
+        for (var i = 0; i < cols.length; i++) {
+            (function(col) {
+                if (col._lzDropBound) return;
+                col._lzDropBound = true;
+                col.classList.add('lz-column-drop');
+
+                col.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'copy';
+                    col.classList.add('lz-column-drop--active');
+                });
+                col.addEventListener('dragleave', function(e) {
+                    if (!col.contains(e.relatedTarget)) {
+                        col.classList.remove('lz-column-drop--active');
+                    }
+                });
+                col.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    col.classList.remove('lz-column-drop--active');
+                    var slug = e.dataTransfer.getData('text/plain');
+                    var colId = col.getAttribute('data-node');
+                    if (slug && colId) {
+                        window.parent.postMessage({
+                            action: 'lz_column_drop',
+                            module: slug,
+                            parent_id: colId,
+                        }, parentOrigin);
+                    }
+                });
+            })(cols[i]);
+        }
+    }
 
     function bindModuleClickEvents() {
         var nodes = contentArea.querySelectorAll('[data-node-id]');
@@ -106,10 +153,15 @@ get_header(); ?>
         }
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bindModuleClickEvents);
-    } else {
+    function init() {
         bindModuleClickEvents();
+        bindColumnDropTargets();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 })();
 </script>
