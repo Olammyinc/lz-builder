@@ -168,7 +168,6 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => __('Module not available on your plan.', 'lz-builder')]);
         }
 
-        // If no parent_id was sent, find the last column in the current layout.
         if (empty($parent_id)) {
             $parent_id = LZ_Page_Data::find_last_column($post_id, 'draft');
         }
@@ -177,11 +176,8 @@ class LZ_AJAX_Handlers {
         if (is_wp_error($node_id)) {
             wp_send_json_error(['message' => $node_id->get_error_message()]);
         }
-        if (class_exists('LzBuilder\LZ_CSS_Accumulator')) {
-            LZ_CSS_Accumulator::clear();
-        }
 
-        // Render module for the preview.
+        // Render just the new module — fast, single-node render.
         $rendered_html = '';
         $render_error  = '';
         try {
@@ -204,17 +200,10 @@ class LZ_AJAX_Handlers {
             error_log('[Lz Builder] Module render error for "' . $module_slug . '": ' . $render_error);
         }
 
-        $layout_html = '';
-        try {
-            $layout_html = LZ_Page_Data::get_builder_content($post_id, 'draft');
-        } catch (\Throwable $e) {
-            error_log('[Lz Builder] Layout render error: ' . $e->getMessage());
-        }
-
         wp_send_json_success([
             'node_id'      => $node_id,
             'html'         => $rendered_html,
-            'layout'       => $layout_html,
+            'parent_id'    => $parent_id,
             'render_error' => $render_error,
             'message'      => __('Module added.', 'lz-builder'),
         ]);

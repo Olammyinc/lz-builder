@@ -1,6 +1,6 @@
 # Lz Builder — Project Context
 
-Last updated: 2026-07-18 · **v1.7.1** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
+Last updated: 2026-07-19 · **v1.7.1** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
 
 ## Direction (read first)
 
@@ -23,110 +23,107 @@ of it, so it comes after the builder core is right.
 
 **Tech stack:** PHP 7.4+ · React 18 (`@wordpress/element`, built with `@wordpress/scripts`) · SCSS
 **Shipped:** 7 modules (row, column, heading, text-editor, button, photo, video) · 28 field
-templates · 14 AJAX actions + 14 REST routes · WP Ultimo subscription gating · template CPT
+templates · 14 AJAX actions + 14 REST routes · WP Ultimo subscription gating · template CPT ·
+`readme.txt` · 10 unit tests (`tests/test-class-lz-page-data.php`) · zip ships at ~104KB
 
 The plugin is now under git with build output (`assets/js/build/lz-builder.js`, `.asset.php`)
 committed — required, since the plugin ships without a build step. `*.map` and `node_modules/`
 are gitignored.
 
-### Recent history
+### Commit history
 
 | Commit | What landed |
 |---|---|
 | `178111a` v1.7.0 | React 18 builder UI (real `src/`, webpack building), 28 field templates, sanitization fixes, postMessage hardening |
 | `f90ccea` v1.7.1 | Draft isolation, drag-and-drop fix, overlay fix, security |
 | `7f8ab78` v1.7.1 | Follow-up review fixes (empty-draft fallback, REST fatal, preview leak, clone position, null guards, REST perms, post_id checks) |
+| `030c063` v1.7.1 | N1-N7: column ordering, per-column drop targets, sort stability, orphan guard, duplicate/row UI, readme, tests |
+| `bd487cd` v1.7.1 | Fix duplicate positioning (`$data[]` order), preview updates after delete/dup/row, CSS overflow on module panel |
 
-### Resolved (verified by code review 2026-07-18)
+### Resolved (verified by code review 2026-07-19)
 
 - **Draft isolation.** All mutators default to `'draft'`. `save_layout` is a server-side
   draft→published promotion taking no client payload; `save_draft` is a no-op ack. The client
   loads `'draft'`. `get_layout_data` correctly distinguishes `''` (never saved → fall back to
   published) from `'[]'` (deliberately emptied → stay empty).
 - **Drag-and-drop over the iframe.** Document-level `dragstart`/`dragend`, `pointer-events:none`
-  on the iframe mid-drag, overlay driven by `isDragging`. The buggy `relatedTarget` dragleave
-  is gone.
+  on the iframe mid-drag, overlay driven by `isDragging`.
+- **Per-column drop targets.** Each `.lz-column` in `builder-preview.php` gets dragover/drop
+  handlers that post `lz_column_drop` with `parent_id`. `App.js` listens and calls `add_module` with
+  the correct column. Module cards still work as the global drop source via the canvas overlay.
 - **Selection overlay.** CSS inlined in `builder-preview.php` so it ships with the element it
-  styles (it lives inside the iframe, which only loads the frontend stylesheet), plus
-  `window.scrollY/scrollX` offsets.
-- **`render_content`** returns builder content only (no longer concatenates original post
-  content), switches on draft/published, and gates preview behind `edit_post`.
+  styles, plus `window.scrollY/scrollX` offsets.
+- **Module placement.** `find_last_column()` walks `sort_nodes()` output in document order
+  (last row's first column), not just global max position.
+- **Intra-column order.** `add_module` counts existing sibling modules under the same parent and
+  sets `position = sibling_count + 1` — no more `usort` tie-break issues on PHP 7.4.
+- **Orphan-node guard.** Row auto-creation triggers on "no columns exist" (`$has_columns` flag),
+  not `empty($data)` which missed the case where rows exist but columns don't.
+- **Duplicate/row UI.** Duplicate button in Settings tab sidebar. Row layout picker (1 Col, 2
+  Cols, 3 Cols, 4 Cols, Left Sidebar, Right Sidebar) in Modules tab.
+- **Duplicate positioning.** `duplicate_node` now appends the clone to `$data[]` AFTER setting
+  its position to `max sibling position + 1` — the previous `$data[]`-before-set bug meant
+  the persisted clone had the original's position.
+- **Preview updates after mutations.** All mutating AJAX handlers (`delete_node`, `duplicate_node`,
+  `add_row`) now return `layout` HTML via `get_layout_html_safe()`. Sidebar.js calls
+  `updatePreview(r.data.layout)` after each so the iframe refreshes immediately.
+- **CSS overflow.** `.lz-modules-panel` is a flex column with `min-height: 0`; `.lz-module-list`
+  uses `flex: 1` so the Rows section above it doesn't push the module grid past the sidebar edge.
+- **`render_content`** returns builder content only, switches on draft/published, and gates
+  preview behind `edit_post`.
 - **Capability checks.** `check_permissions()` resolves `post_id` then checks
   `current_user_can('edit_post', $post_id)`; `check_basic_permissions()` covers non-post-scoped
-  endpoints. Closes the hole where any Contributor could overwrite any post's builder data.
-- **The old build landmine is gone** — `src/` exists and webpack builds cleanly. `npm run build`
-  is safe again.
+  endpoints.
+- **REST `render-settings-form`** uses shared `build_settings_form_html()` helper — no more
+  undefined-method fatal.
+- **Field code / sanitization.** `code` field type uses `wp_kses_post`; compound fields
+  recursively apply `sanitize_text_field`.
+- **Empty layouts work.** Publish reads draft, promotes any data (including `[]`) to published.
+- **Author.** `Ibrahim Olammy` (was `Lz Plugins`).
 
 ---
 
 ## Open Work — prioritized
 
-### P1 · Module placement is wrong (user-visible)
+### P1 · none (all P1/P2/P3 resolved)
 
-**`find_last_column()` picks the wrong column.** `includes/class-lz-page-data.php:384` scans for
-the globally-highest `position`, but `position` is scoped **per parent** — `add_row` assigns
-columns `0..n-1` within their own group. Consequences:
-
-- On a 2-column row (positions `0,1`) every module lands in the **right** column. The left
-  column is unreachable.
-- With Row A (3 cols `0,1,2`) then Row B (2 cols `0,1`), it resolves to Row A's third column,
-  not anything in Row B.
-
-**Fix:** walk in document order (rows sorted by position → column-group → columns sorted by
-position), take the **last row**, then its **first column** — which matches user expectation.
-
-### P1 · Per-column drop targets (never built)
-
-The UI still never sends `parent_id`/`position`; there are no drop targets in the preview. This
-is the highest-value remaining item — without it, placement is guesswork and the P1 above only
-shifts *which* wrong column gets used.
-
-**Fix:** mark each `.lz-column` in `builder-preview.php` with its node id, add `dragover`/`drop`
-handlers, postMessage the target column id + index to the parent, and have `Canvas.js` send real
-`parent_id`/`position` to `add_module`.
-
-### P2 · Intra-column order is non-deterministic on PHP 7.4
-
-The UI never sends `position`, so every appended module gets `position: 0`. `sort_nodes` uses
-`usort` (`class-lz-page-data.php:71`), and **`usort` is not stable before PHP 8.0** — the plugin
-header declares `Requires PHP: 7.4`. Module order within a column can reshuffle between renders.
-
-**Fix:** when appending in `add_module`, set `position` to the count of existing sibling modules
-in that column.
-
-### P2 · Orphan-node edge case
-
-`add_module` auto-creates a row only when the layout is *completely empty*. If nodes exist but no
-columns do, `find_last_column` returns `''`, the module is saved with an empty `parent_id`, and
-`get_builder_content` (which only walks rows→groups→columns→modules) renders it nowhere — it
-looks silently lost.
-
-**Fix:** guard on "no columns exist," not "data is empty."
-
-### P3 · Implemented-but-unreachable endpoints
-
-`duplicate_node`, `move_node`, and `add_row` all work server-side but have no UI. Needs
-duplicate/move controls on the selected node, and a row layout picker.
+The critical placement, ordering, and UI gaps are closed. Remaining work is all P4-level polish
+and Lz Funnels integration (see below).
 
 ### P4 · Remaining gaps
 
-- No tests (`tests/` empty), no translations (`languages/` empty).
-- Leftover `FLBuilder` shim references from the Beaver Builder lineage — remove, don't extend.
-- ~53K files, mostly `node_modules/` — keep an eye on deployment zip size.
+- **No translations.** `languages/` exists with a `.gitkeep` but no `.pot`/`.po`/`.mo` files.
+  All strings use `lz-builder` text domain and `__()`/`esc_html__()` wrappers — pot generation
+  is straightforward but hasn't been done.
+- **No move-node UI.** `Sidebar.js` has Delete and Duplicate buttons. `move_node` works
+  server-side but has no UI — would need up/down arrows or a drag-to-reorder affordance.
+- **No apply_template confirmation.** Applying a template silently replaces the entire draft
+  with no "are you sure?" prompt.
+- **Save Settings form submit races auto-save.** The 400ms timeout between `doAutoSave()` (120ms
+  debounce) and tab switch can lose the save if the server is slow.
+- **No WordPress.org `readme.txt`**, not needed for development.
+
+### P4 · Deferred
+
+- **Lz Funnels integration** (see section below).
+- **Move-node UI** — nice-to-have, not blocker.
 
 ---
 
 ## Verification Notes
 
-The v1.7.1 fixes were confirmed by **code review, not a live WordPress run.** Before treating
-these as closed, exercise in a real install:
+The fixes were confirmed by **code review, not a live WordPress run.** Before treating these as
+closed, exercise in a real install:
 
-- **Drag-and-drop in Chrome *and* Firefox** — the fix reads correctly but is browser-behavior
-  dependent (iframes capture drag events into their own document).
+- **Drag-and-drop in Chrome *and* Firefox** — iframes have browser-specific drag behavior.
+- **Per-column drops** — drag a module card onto the iframe's right column vs left column and
+  confirm it lands in the targeted `.lz-column`.
 - **Draft→publish round trip** — edit, verify the live page is unchanged, publish, verify it
   updates.
-- **Placement** — add modules to a multi-column row and confirm they land where clicked (expect
-  failures until the two P1 items are done).
+- **Duplicate** — click a module, hit Duplicate, confirm a clone appears in the iframe
+  immediately and is persisted after reload.
+- **Delete** — delete a module, confirm iframe updates immediately.
+- **Row picker** — click a row layout, confirm a new row appears in the iframe.
 
 ---
 
@@ -153,6 +150,12 @@ cd /home/olammy/projects/lz-builder
 npm run build       # JS (wp-scripts) + SCSS — safe again as of v1.7.0
 npm run build:css   # SCSS only
 npm run start       # watch mode
+
+# Zip for upload (no node_modules, src, or dev files)
+rm -f ../lz-builder-1.7.1.zip && \
+  zip -r ../lz-builder-1.7.1.zip . \
+    -x "node_modules/*" "src/" ".gitignore" ".git/*" "AGENTS.md" "CONTEXT.md" "context.md" \
+       "package.json" "package-lock.json" "webpack.config.js" "*.map" "assets/js/build/*.map"
 
 git log --oneline -10
 ```

@@ -7,11 +7,13 @@ export default function Notices( { notices, dispatch } ) {
 		...notices.map( ( notice ) =>
 			createElement( 'div', {
 				key: notice.id,
-				className: 'lz-notice lz-notice--' + ( notice.type || 'info' ),
+				className: 'lz-notice lz-notice--' + ( notice.type || 'success' ),
 			},
-				createElement( 'p', null, notice.message ),
+				createElement( 'span', { className: 'lz-notice-text' }, notice.message ),
 				createElement( 'button', {
+					type: 'button',
 					className: 'lz-notice-dismiss',
+					'aria-label': 'Dismiss',
 					onClick: () => dispatch( { type: 'REMOVE_NOTICE', id: notice.id } ),
 				}, '\u00D7' ),
 			)

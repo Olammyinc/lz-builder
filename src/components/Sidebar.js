@@ -83,6 +83,7 @@ export default function Sidebar( { state, dispatch, data, showNotice, postToIfra
 					lockedModules: data.locked_modules || [],
 					showNotice,
 					updatePreview,
+					postToIframe,
 					dispatch,
 					refreshLayout,
 					handleAddRow,

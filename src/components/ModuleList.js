@@ -12,21 +12,36 @@ const ICONS = {
 };
 
 const ROW_LAYOUTS = [
-	{ key: '1-col', label: '1 Col' },
-	{ key: '2-cols', label: '2 Cols' },
-	{ key: '3-cols', label: '3 Cols' },
-	{ key: '4-cols', label: '4 Cols' },
-	{ key: 'left-sidebar', label: 'Left Sidebar' },
-	{ key: 'right-sidebar', label: 'Right Sidebar' },
+	{ key: '1-col', label: '1 Col', cols: 1 },
+	{ key: '2-cols', label: '2 Cols', cols: 2 },
+	{ key: '3-cols', label: '3 Cols', cols: 3 },
+	{ key: '4-cols', label: '4 Cols', cols: 4 },
+	{ key: 'left-sidebar', label: 'Left SB', cols: '1/3-2/3' },
+	{ key: 'right-sidebar', label: 'Right SB', cols: '2/3-1/3' },
 ];
 
-export default function ModuleList( { modules, lockedModules, showNotice, updatePreview, dispatch, refreshLayout, handleAddRow } ) {
+function RowIcon( { cols } ) {
+	if ( typeof cols === 'number' ) {
+		const blocks = Array.from( { length: cols }, ( _, i ) =>
+			createElement( 'span', { key: i, className: 'lz-row-icon-block' } )
+		);
+		return createElement( 'span', { className: 'lz-row-icon' }, ...blocks );
+	}
+	return createElement( 'span', { className: 'lz-row-icon lz-row-icon--sidebar' },
+		createElement( 'span', { className: 'lz-row-icon-block lz-row-icon-block--wide' } ),
+		createElement( 'span', { className: 'lz-row-icon-block' } ),
+	);
+}
+
+export default function ModuleList( { modules, lockedModules, showNotice, updatePreview, postToIframe, dispatch, refreshLayout, handleAddRow } ) {
 	const [ search, setSearch ] = useState( '' );
 
 	const handleAddModule = useCallback( ( slug ) => {
 		lzFetch( 'add_module', { module: slug } ).then( ( r ) => {
 			if ( r && r.success ) {
-				if ( r.data && r.data.layout ) {
+				if ( r.data && r.data.html && r.data.parent_id ) {
+					postToIframe( { action: 'lz_append_to_column', column_id: r.data.parent_id, html: r.data.html } );
+				} else if ( r.data.layout ) {
 					updatePreview( r.data.layout );
 				}
 				dispatch( { type: 'SET_UNSAVED', value: true } );
@@ -95,7 +110,9 @@ export default function ModuleList( { modules, lockedModules, showNotice, update
 							}
 						},
 					},
-						createElement( 'div', { className: 'lz-module-card-icon' }, '\u2B1C' ),
+						createElement( 'div', { className: 'lz-module-card-icon' },
+							createElement( RowIcon, { cols: rl.cols } ),
+						),
 						createElement( 'div', { className: 'lz-module-card-name' }, rl.label ),
 					)
 				),

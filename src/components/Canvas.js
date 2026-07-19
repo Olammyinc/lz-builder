@@ -1,7 +1,7 @@
-import { createElement, useCallback, useState } from '@wordpress/element';
+import { createElement, useCallback } from '@wordpress/element';
 import { getPreviewUrl, lzFetch } from '../api';
 
-export default function Canvas( { data, updatePreview, showNotice, iframeRef, dispatch, refreshLayout, isDragging } ) {
+export default function Canvas( { data, updatePreview, showNotice, postToIframe, iframeRef, dispatch, refreshLayout, isDragging } ) {
 	const previewUrl = getPreviewUrl();
 
 	const handleDrop = useCallback( ( e ) => {
@@ -10,7 +10,11 @@ export default function Canvas( { data, updatePreview, showNotice, iframeRef, di
 		if ( slug ) {
 			lzFetch( 'add_module', { module: slug } ).then( ( r ) => {
 				if ( r && r.success ) {
-					if ( r.data && r.data.layout ) updatePreview( r.data.layout );
+					if ( r.data && r.data.html && r.data.parent_id ) {
+						postToIframe( { action: 'lz_append_to_column', column_id: r.data.parent_id, html: r.data.html } );
+					} else if ( r.data && r.data.layout ) {
+						updatePreview( r.data.layout );
+					}
 					dispatch( { type: 'SET_UNSAVED', value: true } );
 					showNotice( 'Module added!', 'success' );
 					refreshLayout();
@@ -22,7 +26,7 @@ export default function Canvas( { data, updatePreview, showNotice, iframeRef, di
 				}
 			} );
 		}
-	}, [ updatePreview, showNotice, dispatch, refreshLayout ] );
+	}, [ updatePreview, showNotice, postToIframe, dispatch, refreshLayout ] );
 
 	const handleDragOver = useCallback( ( e ) => {
 		e.preventDefault();

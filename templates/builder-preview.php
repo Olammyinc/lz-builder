@@ -57,6 +57,20 @@ get_header(); ?>
             bindColumnDropTargets();
         }
 
+        if (event.data.action === 'lz_append_to_column' && event.data.column_id && event.data.html) {
+            var col = contentArea.querySelector('[data-node="' + event.data.column_id + '"]');
+            if (col) {
+                var wrapper = document.createElement('div');
+                wrapper.innerHTML = event.data.html.trim();
+                var newEl = wrapper.firstChild;
+                if (newEl) {
+                    col.appendChild(newEl);
+                    bindModuleClickEvents();
+                    bindColumnDropTargets();
+                }
+            }
+        }
+
         if (event.data.action === 'lz_replace_module' && event.data.node_id && event.data.html) {
             var oldModule = contentArea.querySelector('[data-node-id="' + event.data.node_id + '"]');
             if (oldModule) {

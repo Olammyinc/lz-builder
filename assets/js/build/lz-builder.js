@@ -167,7 +167,15 @@ function App({
           parent_id: event.data.parent_id
         }).then(r => {
           if (r && r.success) {
-            if (r.data && r.data.layout) updatePreview(r.data.layout);
+            if (r.data && r.data.html && r.data.parent_id) {
+              postToIframe({
+                action: 'lz_append_to_column',
+                column_id: r.data.parent_id,
+                html: r.data.html
+              });
+            } else if (r.data && r.data.layout) {
+              updatePreview(r.data.layout);
+            }
             dispatch({
               type: 'SET_UNSAVED',
               value: true
@@ -314,28 +322,57 @@ const ICONS = {
 };
 const ROW_LAYOUTS = [{
   key: '1-col',
-  label: '1 Col'
+  label: '1 Col',
+  cols: 1
 }, {
   key: '2-cols',
-  label: '2 Cols'
+  label: '2 Cols',
+  cols: 2
 }, {
   key: '3-cols',
-  label: '3 Cols'
+  label: '3 Cols',
+  cols: 3
 }, {
   key: '4-cols',
-  label: '4 Cols'
+  label: '4 Cols',
+  cols: 4
 }, {
   key: 'left-sidebar',
-  label: 'Left Sidebar'
+  label: 'Left SB',
+  cols: '1/3-2/3'
 }, {
   key: 'right-sidebar',
-  label: 'Right Sidebar'
+  label: 'Right SB',
+  cols: '2/3-1/3'
 }];
+function RowIcon({
+  cols
+}) {
+  if (typeof cols === 'number') {
+    const blocks = Array.from({
+      length: cols
+    }, (_, i) => (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
+      key: i,
+      className: 'lz-row-icon-block'
+    }));
+    return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
+      className: 'lz-row-icon'
+    }, ...blocks);
+  }
+  return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
+    className: 'lz-row-icon lz-row-icon--sidebar'
+  }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
+    className: 'lz-row-icon-block lz-row-icon-block--wide'
+  }), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
+    className: 'lz-row-icon-block'
+  }));
+}
 function ModuleList({
   modules,
   lockedModules,
   showNotice,
   updatePreview,
+  postToIframe,
   dispatch,
   refreshLayout,
   handleAddRow
@@ -346,7 +383,13 @@ function ModuleList({
       module: slug
     }).then(r => {
       if (r && r.success) {
-        if (r.data && r.data.layout) {
+        if (r.data && r.data.html && r.data.parent_id) {
+          postToIframe({
+            action: 'lz_append_to_column',
+            column_id: r.data.parent_id,
+            html: r.data.html
+          });
+        } else if (r.data.layout) {
           updatePreview(r.data.layout);
         }
         dispatch({
@@ -408,7 +451,9 @@ function ModuleList({
     }
   }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-module-card-icon'
-  }, '\u2B1C'), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+  }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)(RowIcon, {
+    cols: rl.cols
+  })), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-module-card-name'
   }, rl.label))))), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-module-list'
@@ -476,9 +521,13 @@ function Notices({
     className: 'lz-notices'
   }, ...notices.map(notice => (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     key: notice.id,
-    className: 'lz-notice lz-notice--' + (notice.type || 'info')
-  }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('p', null, notice.message), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('button', {
+    className: 'lz-notice lz-notice--' + (notice.type || 'success')
+  }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
+    className: 'lz-notice-text'
+  }, notice.message), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('button', {
+    type: 'button',
     className: 'lz-notice-dismiss',
+    'aria-label': 'Dismiss',
     onClick: () => dispatch({
       type: 'REMOVE_NOTICE',
       id: notice.id
@@ -825,6 +874,7 @@ function Sidebar({
           lockedModules: data.locked_modules || [],
           showNotice,
           updatePreview,
+          postToIframe,
           dispatch,
           refreshLayout,
           handleAddRow
