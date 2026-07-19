@@ -1,71 +1,19 @@
 import { createElement, useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { lzFetch } from '../api';
-
-function bindColorFields( container ) {
-	const colorFields = container.querySelectorAll( '.lz-color-field' );
-	colorFields.forEach( ( cf ) => {
-		const swatch = cf.querySelector( '.lz-color-swatch' );
-		const textInput = cf.querySelector( '.lz-field-color-text' );
-		const nativeInput = cf.querySelector( '.lz-field-color-native' );
-
-		function updateColor( val ) {
-			const v = val || 'transparent';
-			if ( swatch ) swatch.style.backgroundColor = v;
-			if ( textInput ) { textInput.value = v; }
-			if ( nativeInput && nativeInput.value !== v ) nativeInput.value = v;
-		}
-
-		if ( swatch && nativeInput ) {
-			swatch.addEventListener( 'click', () => nativeInput.click() );
-		}
-		if ( nativeInput ) {
-			nativeInput.addEventListener( 'input', ( e ) => updateColor( e.target.value ) );
-		}
-		if ( textInput ) {
-			textInput.addEventListener( 'input', ( e ) => updateColor( e.target.value ) );
-		}
-	} );
-}
-
-function bindButtonGroups( container, doAutoSave ) {
-	const btnGroups = container.querySelectorAll( '.lz-field-btn-group' );
-	btnGroups.forEach( ( group ) => {
-		const options = group.querySelectorAll( '.lz-btn-group-option' );
-		const hiddenInput = group.querySelector( 'input[type="hidden"]' );
-		options.forEach( ( opt ) => {
-			opt.addEventListener( 'click', function () {
-				options.forEach( ( o ) => o.classList.remove( 'lz-btn-group-active' ) );
-				this.classList.add( 'lz-btn-group-active' );
-				if ( hiddenInput ) hiddenInput.value = this.getAttribute( 'data-value' );
-				doAutoSave();
-			} );
-		} );
-	} );
-}
+import registry from '../fields/registry';
 
 export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispatch } ) {
-	const [ html, setHtml ] = useState( '' );
+	const [ schema, setSchema ] = useState( null );
+	const [ values, setValues ] = useState( {} );
 	const [ loading, setLoading ] = useState( false );
-	const formRef = useRef( null );
 	const autoSaveTimerRef = useRef( null );
-	const boundRef = useRef( false );
-	const handlersRef = useRef( [] );
+	const mountedRef = useRef( true );
 
-	const doAutoSave = useCallback( () => {
+	const doAutoSave = useCallback( ( newValues ) => {
 		clearTimeout( autoSaveTimerRef.current );
-		if ( ! formRef.current ) return;
 		autoSaveTimerRef.current = setTimeout( () => {
-			if ( ! formRef.current ) return;
-			const form = formRef.current.querySelector( '#lz-settings-form' );
-			if ( ! form ) return;
-			const inputs = form.querySelectorAll( 'input[name], select[name], textarea[name]' );
-			const settings = {};
-			inputs.forEach( ( inp ) => {
-				const name = inp.getAttribute( 'name' );
-				if ( ! name ) return;
-				settings[ name ] = inp.type === 'checkbox' ? inp.checked : inp.value;
-			} );
-			lzFetch( 'save_settings', { node_id: nodeId, settings } ).then( ( r ) => {
+			if ( ! mountedRef.current ) return;
+			lzFetch( 'save_settings', { node_id: nodeId, settings: newValues } ).then( ( r ) => {
 				if ( r && r.success && r.data && r.data.html ) {
 					dispatch( { type: 'SET_UNSAVED', value: true } );
 					postToIframe( {
@@ -75,79 +23,56 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 					} );
 				}
 			} );
-		}, 120 );
+		}, 300 );
 	}, [ nodeId, postToIframe, dispatch ] );
+
+	const handleChange = useCallback( ( change ) => {
+		setValues( ( prev ) => {
+			if ( typeof change === 'object' && change !== null ) {
+				const next = { ...prev, ...change };
+				doAutoSave( next );
+				return next;
+			}
+			return prev;
+		} );
+	}, [ doAutoSave ] );
+
+	const handleSingleChange = useCallback( ( key, value ) => {
+		setValues( ( prev ) => {
+			const next = { ...prev, [ key ]: value };
+			doAutoSave( next );
+			return next;
+		} );
+	}, [ doAutoSave ] );
 
 	useEffect( () => {
 		if ( ! nodeId ) {
-			setHtml( '' );
+			setSchema( null );
+			setValues( {} );
 			return;
 		}
 		setLoading( true );
-		boundRef.current = false;
-		lzFetch( 'render_settings_form', { node_id: nodeId } ).then( ( r ) => {
+		setSchema( null );
+		lzFetch( 'get_settings_schema', { node_id: nodeId } ).then( ( r ) => {
+			if ( ! mountedRef.current ) return;
 			setLoading( false );
-			if ( r && r.success && r.data && r.data.html ) {
-				setHtml( r.data.html );
+			if ( r && r.success && r.data ) {
+				setSchema( r.data );
+				setValues( r.data.values || {} );
 			} else {
 				const msg = ( r && r.data && r.data.message ) || 'Could not load settings.';
-				setHtml( '' );
 				showNotice( msg, 'error' );
 			}
 		} );
 	}, [ nodeId ] );
 
 	useEffect( () => {
-		if ( ! html || ! formRef.current || boundRef.current ) return;
-		boundRef.current = true;
-		const container = formRef.current;
-		const h = [];
-
-		bindColorFields( container );
-		bindButtonGroups( container, doAutoSave );
-
-		const inputs = container.querySelectorAll(
-			'input[name], select[name], textarea[name]'
-		);
-		inputs.forEach( ( inp ) => {
-			const handler = () => doAutoSave();
-			inp.addEventListener( 'input', handler );
-			inp.addEventListener( 'change', handler );
-			h.push( { el: inp, type: 'input', handler } );
-			h.push( { el: inp, type: 'change', handler } );
-		} );
-
-		const backBtn = container.querySelector( '#lz-settings-back' );
-		if ( backBtn ) {
-			const handler = ( e ) => {
-				e.preventDefault();
-				clearTimeout( autoSaveTimerRef.current );
-				dispatch( { type: 'BACK_TO_MODULES' } );
-			};
-			backBtn.addEventListener( 'click', handler );
-			h.push( { el: backBtn, type: 'click', handler } );
-		}
-
-		const form = container.querySelector( '#lz-settings-form' );
-		if ( form ) {
-			const handler = ( e ) => {
-				e.preventDefault();
-				doAutoSave();
-				setTimeout( () => dispatch( { type: 'BACK_TO_MODULES' } ), 400 );
-			};
-			form.addEventListener( 'submit', handler );
-			h.push( { el: form, type: 'submit', handler } );
-		}
-
-		handlersRef.current = h;
-
+		mountedRef.current = true;
 		return () => {
-			h.forEach( ( { el, type, handler } ) => {
-				el.removeEventListener( type, handler );
-			} );
-			boundRef.current = false;
+			mountedRef.current = false;
+			clearTimeout( autoSaveTimerRef.current );
 		};
-	}, [ html, doAutoSave ] );
+	}, [] );
 
 	if ( ! nodeId ) {
 		return createElement( 'div', { className: 'lz-action-panel' },
@@ -155,15 +80,74 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 		);
 	}
 
-	if ( loading ) {
+	if ( loading || ! schema ) {
 		return createElement( 'div', { className: 'lz-action-panel' },
 			createElement( 'p', null, 'Loading settings\u2026' ),
 		);
 	}
 
-	return createElement( 'div', {
-		ref: formRef,
-		className: 'lz-settings-panel',
-		dangerouslySetInnerHTML: { __html: html },
-	} );
+	return createElement( 'div', { className: 'lz-settings-panel' },
+		createElement( 'div', { className: 'lz-settings-header' },
+			createElement( 'h3', { className: 'lz-settings-title' }, schema.title ),
+			createElement( 'button', {
+				type: 'button',
+				className: 'lz-btn lz-btn-back',
+				onClick: ( e ) => {
+					e.preventDefault();
+					clearTimeout( autoSaveTimerRef.current );
+					dispatch( { type: 'BACK_TO_MODULES' } );
+				},
+			}, '\u2190 Back' ),
+		),
+		...schema.tabs.map( ( tab, ti ) =>
+			createElement( 'div', { key: ti, className: 'lz-settings-tab' },
+				tab.title && createElement( 'h4', { className: 'lz-settings-tab-title' }, tab.title ),
+				...tab.sections.map( ( section, si ) =>
+					createElement( 'div', { key: si },
+						section.title && createElement( 'h5', { className: 'lz-settings-section-title' }, section.title ),
+						createElement( 'div', { className: 'lz-settings-fields' },
+							...Object.entries( section.fields || {} ).map( ( [ fieldKey, field ] ) => {
+								const FieldComponent = registry[ field.type ];
+								const fieldValue = values[ fieldKey ] !== undefined ? values[ fieldKey ] : field.default;
+
+								const changeHandler = ( val ) => {
+									if ( typeof val === 'object' && val !== null ) {
+										handleChange( val );
+									} else {
+										handleSingleChange( fieldKey, val );
+									}
+								};
+
+								return createElement( 'div', {
+									key: fieldKey,
+									className: 'lz-field lz-field-' + ( field.type || 'text' ),
+								},
+									createElement( 'label', { className: 'lz-field-label' }, field.label || fieldKey ),
+									FieldComponent
+										? createElement( FieldComponent, {
+												field: { ...field, key: fieldKey },
+												value: fieldValue !== undefined ? fieldValue : '',
+												onChange: changeHandler,
+										  } )
+										: createElement( 'div', { className: 'lz-field-unknown' },
+												'Unknown field type: ' + ( field.type || 'unknown' ),
+										  ),
+								);
+							} ),
+						),
+					)
+				),
+			)
+		),
+		createElement( 'div', { className: 'lz-settings-actions' },
+			createElement( 'button', {
+				type: 'button',
+				className: 'lz-btn lz-btn-primary lz-btn-save-settings',
+				onClick: () => {
+					doAutoSave( values );
+					setTimeout( () => dispatch( { type: 'BACK_TO_MODULES' } ), 400 );
+				},
+			}, 'Save' ),
+		),
+	);
 }

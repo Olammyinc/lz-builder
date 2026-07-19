@@ -18,6 +18,7 @@ class LZ_AJAX_Handlers {
             'save_settings',
             'render_node',
             'render_settings_form',
+            'get_settings_schema',
             'get_templates',
             'apply_template',
             'search_modules',
@@ -48,6 +49,7 @@ class LZ_AJAX_Handlers {
             'save-settings'           => ['methods' => 'POST', 'callback' => 'save_settings_rest'],
             'render-node'             => ['methods' => 'GET',  'callback' => 'render_node_rest'],
             'render-settings-form'    => ['methods' => 'POST', 'callback' => 'render_settings_form_rest'],
+            'get-settings-schema'     => ['methods' => 'POST', 'callback' => 'get_settings_schema_rest'],
             'templates'               => ['methods' => 'GET',  'callback' => 'get_templates_rest'],
             'apply-template'          => ['methods' => 'POST', 'callback' => 'apply_template_rest'],
             'search-modules'          => ['methods' => 'GET',  'callback' => 'search_modules_rest'],
@@ -345,6 +347,131 @@ class LZ_AJAX_Handlers {
             'node_id'  => $node_id,
             'settings' => $current_settings,
         ]);
+    }
+
+    /**
+     * AJAX: get_settings_schema
+     *
+     * Returns the module's settings form as a JSON schema + current values,
+     * so the React client can render fields without dangerouslySetInnerHTML.
+     */
+    public static function get_settings_schema(): void {
+        self::check_permissions();
+        $post_id = self::get_post_id_from_request();
+        $node_id = isset($_POST['node_id']) ? sanitize_text_field(wp_unslash($_POST['node_id'])) : '';
+
+        if (empty($node_id)) {
+            wp_send_json_error(['message' => __('Node ID required.', 'lz-builder')]);
+        }
+
+        $node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
+        if (!$node || 'module' !== $node->type) {
+            wp_send_json_error(['message' => __('Node not found or not a module.', 'lz-builder')]);
+        }
+
+        $module_slug = $node->module ?? '';
+        $module_obj  = LZ_Module_Registry::get_instance()->get_module($module_slug);
+        if (!$module_obj || !method_exists($module_obj, 'get_settings_form')) {
+            wp_send_json_error(['message' => __('Module not found.', 'lz-builder')]);
+        }
+
+        $current_settings = isset($node->settings) && is_object($node->settings)
+            ? (array) $node->settings
+            : [];
+
+        $schema = self::build_settings_schema($module_obj, $current_settings, $node);
+
+        wp_send_json_success($schema);
+    }
+
+    /**
+     * Build the settings schema array shared by AJAX and REST endpoints.
+     *
+     * Traverses get_settings_form() tabs→sections→fields and produces a JSON-safe
+     * representation with ordered options arrays and values merged over defaults.
+     */
+    private static function build_settings_schema($module_obj, array $current_settings, \stdClass $node): array {
+        $form = $module_obj->get_settings_form();
+
+        // Register first so LZ_Settings_Form can traverse it for defaults
+        \LzBuilder\LZ_Settings_Form::register($module_obj->get_slug(), $form);
+
+        $defaults      = LZ_Settings_Form::get_defaults($module_obj->get_slug());
+        $merged_values = array_merge($defaults, $current_settings);
+
+        $tabs = [];
+        foreach ($form as $tab) {
+            $tab_out = [
+                'title'    => $tab['title'] ?? '',
+                'sections' => [],
+            ];
+
+            foreach ($tab['sections'] ?? [] as $section) {
+                $section_out = [
+                    'title'  => $section['title'] ?? '',
+                    'fields' => [],
+                ];
+
+                foreach ($section['fields'] ?? [] as $field_key => $field) {
+                    if (!is_array($field) || !isset($field['type'])) {
+                        continue;
+                    }
+
+                    $field_out = $field;
+
+                    // Preview hint for live-preview (Tier 1).
+                    $field_out['preview'] = $field['preview'] ?? self::get_field_preview_type($field['type']);
+
+                    // Convert associative options to ordered [{value, label}] for JSON stability
+                    if (isset($field['options']) && is_array($field['options'])) {
+                        $ordered = [];
+                        foreach ($field['options'] as $opt_val => $opt_label) {
+                            $ordered[] = [
+                                'value' => $opt_val,
+                                'label' => $opt_label,
+                            ];
+                        }
+                        $field_out['options'] = $ordered;
+                    } else {
+                        $field_out['options'] = null;
+                    }
+
+                    $section_out['fields'][$field_key] = $field_out;
+                }
+
+                $tab_out['sections'][] = $section_out;
+            }
+
+            $tabs[] = $tab_out;
+        }
+
+        return [
+            'node_id' => $node->node_id,
+            'module'  => $node->module ?? '',
+            'title'   => $module_obj->get_name() . ' ' . __('Settings', 'lz-builder'),
+            'tabs'    => $tabs,
+            'values'  => $merged_values,
+        ];
+    }
+
+    /**
+     * Determine whether a field type can be live-previewed via CSS
+     * or requires a server re-render (markup change).
+     */
+    private static function get_field_preview_type(string $type): string {
+        static $css_types = [
+            'color'      => true,
+            'typography' => true,
+            'border'     => true,
+            'dimension'  => true,
+            'spacing'    => true,
+            'unit'       => true,
+            'align'      => true,
+            'shadow'     => true,
+            'gradient'   => true,
+            'font'       => true,
+        ];
+        return isset($css_types[$type]) ? 'css' : 'render';
     }
 
     /**
@@ -907,6 +1034,32 @@ class LZ_AJAX_Handlers {
         $html = self::build_settings_form_html($form, $current_settings, $node_id, $module_obj);
 
         return new \WP_REST_Response(['success' => true, 'html' => $html, 'node_id' => $node_id], 200);
+    }
+
+    /**
+     * REST: get-settings-schema
+     */
+    public static function get_settings_schema_rest(\WP_REST_Request $request): \WP_REST_Response {
+        $post_id = (int) $request->get_param('post_id');
+        $node_id = $request->get_param('node_id');
+
+        $node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
+        if (!$node || 'module' !== $node->type) {
+            return new \WP_REST_Response(['success' => false, 'message' => __('Node not found.', 'lz-builder')], 404);
+        }
+
+        $module_obj = LZ_Module_Registry::get_instance()->get_module($node->module ?? '');
+        if (!$module_obj || !method_exists($module_obj, 'get_settings_form')) {
+            return new \WP_REST_Response(['success' => false, 'message' => __('Module not found.', 'lz-builder')], 404);
+        }
+
+        $current_settings = isset($node->settings) && is_object($node->settings)
+            ? (array) $node->settings
+            : [];
+
+        $schema = self::build_settings_schema($module_obj, $current_settings, $node);
+
+        return new \WP_REST_Response(['success' => true] + $schema, 200);
     }
 
     public static function get_templates_rest(\WP_REST_Request $request): \WP_REST_Response {
