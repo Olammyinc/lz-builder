@@ -1379,7 +1379,7 @@ function FieldColor({
   value,
   onChange
 }) {
-  const v = value || '#000000';
+  const hex = value && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value) ? value : '#000000';
   const swatchRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
   return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-color-field'
@@ -1387,25 +1387,32 @@ function FieldColor({
     type: 'text',
     className: 'lz-field-input lz-field-color-text',
     name: field.key,
-    value: v,
+    value: value || '',
     placeholder: '#000000',
     onInput: e => onChange(e.target.value)
   }), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
     ref: swatchRef,
     className: 'lz-color-swatch',
     style: {
-      backgroundColor: v
+      backgroundColor: value || 'transparent'
     },
     tabIndex: 0,
     role: 'button',
     onClick: () => {
       const native = swatchRef.current?.querySelector('input[type="color"]');
       if (native) native.click();
+    },
+    onKeyDown: e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const native = swatchRef.current?.querySelector('input[type="color"]');
+        if (native) native.click();
+      }
     }
   }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('input', {
     type: 'color',
     className: 'lz-field-color-native',
-    value: v,
+    value: hex,
     onInput: e => onChange(e.target.value)
   })));
 }
@@ -1433,10 +1440,19 @@ function FieldDimension({
   onChange
 }) {
   const k = field.key;
+  const linked = !!value[k + '_linked'];
   function sub(suffix, val) {
-    onChange({
-      [k + suffix]: val
-    });
+    if (linked && suffix.startsWith('_') && suffix !== '_linked' && suffix !== '_unit') {
+      const updates = {};
+      SIDES.forEach(s => {
+        updates[k + '_' + s] = val;
+      });
+      onChange(updates);
+    } else {
+      onChange({
+        [k + suffix]: val
+      });
+    }
   }
   return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-field-dimension'
@@ -1445,7 +1461,7 @@ function FieldDimension({
   }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('input', {
     type: 'checkbox',
     className: 'lz-field-checkbox',
-    checked: !!value[k + '_linked'],
+    checked: linked,
     onChange: e => sub('_linked', e.target.checked ? '1' : '')
   }), ' Link all sides'), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-dimension-grid'
@@ -2186,7 +2202,6 @@ function FieldTypography({
   onChange
 }) {
   const k = field.key;
-  const lines = value && value[k + '_line_height_unit'] !== undefined ? '' : '';
   function sub(suffix, val) {
     onChange({
       [k + suffix]: val
@@ -2241,7 +2256,7 @@ function FieldTypography({
     onInput: e => sub('_line_height', e.target.value)
   }), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('select', {
     className: 'lz-field-select',
-    value: value[k + '_line_height_unit'] || lines,
+    value: value[k + '_line_height_unit'] || '',
     onChange: e => sub('_line_height_unit', e.target.value)
   }, ...LINE_UNITS.map(u => (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('option', {
     key: u,

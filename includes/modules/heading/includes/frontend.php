@@ -44,6 +44,7 @@ if ($letter_spacing !== '' && $letter_spacing !== null && $letter_spacing !== fa
 
 $style .= \LzBuilder\LZ_CSS_Accumulator::build_dimension_inline($settings, 'margin');
 $style .= \LzBuilder\LZ_CSS_Accumulator::build_dimension_inline($settings, 'padding');
+$style .= \LzBuilder\LZ_CSS_Accumulator::build_border_inline($settings, 'border');
 ?>
 <<?php echo tag_escape($tag); ?> class="lz-heading <?php echo esc_attr($node_class); ?>" style="<?php echo esc_attr($style); ?>">
     <?php echo esc_html($text); ?>

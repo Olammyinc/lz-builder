@@ -34,7 +34,6 @@ const LS_UNITS = [ 'px', 'em' ];
 
 export default function FieldTypography( { field, value, onChange } ) {
 	const k = field.key;
-	const lines = value && value[ k + '_line_height_unit' ] !== undefined ? '' : '';
 
 	function sub( suffix, val ) {
 		onChange( { [ k + suffix ]: val } );
@@ -87,7 +86,7 @@ export default function FieldTypography( { field, value, onChange } ) {
 			} ),
 			createElement( 'select', {
 				className: 'lz-field-select',
-				value: value[ k + '_line_height_unit' ] || lines,
+				value: value[ k + '_line_height_unit' ] || '',
 				onChange: ( e ) => sub( '_line_height_unit', e.target.value ),
 			},
 				...LINE_UNITS.map( ( u ) =>

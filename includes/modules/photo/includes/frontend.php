@@ -16,7 +16,6 @@ if ($photo_id > 0) {
 
 $link_url = '';
 $link_target = '';
-// Handle both nested (link->url) and flat (link_url) link formats.
 if (!empty($settings->link)) {
     $link = is_object($settings->link) ? $settings->link : (is_array($settings->link) ? (object) $settings->link : new \stdClass());
     $link_url = $link->url ?? ($settings->link_url ?? '');
@@ -32,16 +31,8 @@ if ($border_radius !== '') {
     $img_style = 'border-radius:' . esc_attr($border_radius . $unit) . ';';
 }
 
-// Build wrapper style with alignment and margins.
 $wrap_style = 'text-align:' . esc_attr($alignment) . ';';
-if (isset($settings->margin_top) && $settings->margin_top !== '') {
-    $margin_top_unit = $settings->margin_top_unit ?? 'px';
-    $wrap_style .= 'margin-top:' . esc_attr($settings->margin_top . $margin_top_unit) . ';';
-}
-if (isset($settings->margin_bottom) && $settings->margin_bottom !== '') {
-    $margin_bottom_unit = $settings->margin_bottom_unit ?? 'px';
-    $wrap_style .= 'margin-bottom:' . esc_attr($settings->margin_bottom . $margin_bottom_unit) . ';';
-}
+$wrap_style .= \LzBuilder\LZ_CSS_Accumulator::build_dimension_inline($settings, 'margin');
 ?>
 <div class="lz-photo <?php echo esc_attr($node_class); ?>" style="<?php echo esc_attr($wrap_style); ?>">
     <?php if (!empty($link_url)) : ?>

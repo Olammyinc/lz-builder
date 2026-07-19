@@ -185,12 +185,21 @@ class LZ_CSS_Accumulator {
     public static function build_dimension_inline(\stdClass $settings, string $key): string {
         $prefix = $key . '_';
         $unit   = $settings->{$prefix . 'unit'} ?? 'px';
+        // Fallback for old per-side unit format (e.g. margin_top_unit → margin_unit).
+        if (!isset($settings->{$prefix . 'unit'})) {
+            foreach (['top', 'right', 'bottom', 'left'] as $fallback_side) {
+                if (isset($settings->{$prefix . $fallback_side . '_unit'})) {
+                    $unit = $settings->{$prefix . $fallback_side . '_unit'} ?? 'px';
+                    break;
+                }
+            }
+        }
         $linked = $settings->{$prefix . 'linked'} ?? false;
 
         if ($linked) {
             $value = $settings->{$prefix . 'top'} ?? '';
             if ($value !== '' && $value !== null && $value !== false) {
-                return esc_attr($key) . ':' . esc_attr($value . $unit) . ';';
+                return $key . ':' . $value . $unit . ';';
             }
             return '';
         }
@@ -200,9 +209,41 @@ class LZ_CSS_Accumulator {
         foreach ($sides as $side) {
             $val = $settings->{$prefix . $side} ?? '';
             if ($val !== '' && $val !== null && $val !== false) {
-                $style .= esc_attr($key . '-' . $side) . ':' . esc_attr($val . $unit) . ';';
+                $style .= $key . '-' . $side . ':' . $val . $unit . ';';
             }
         }
+        return $style;
+    }
+
+    /**
+     * Build border CSS as an inline style string for frontend renderers.
+     */
+    public static function build_border_inline(\stdClass $settings, string $prefix = 'border'): string {
+        $style = '';
+        $k = $prefix . '_';
+
+        $border_style = $settings->{$k . 'style'} ?? '';
+        if (!empty($border_style)) {
+            $style .= 'border-style:' . $border_style . ';';
+        }
+
+        $width = $settings->{$k . 'width'} ?? '';
+        if ($width !== '' && $width !== null && $width !== false) {
+            $unit = $settings->{$k . 'width_unit'} ?? 'px';
+            $style .= 'border-width:' . $width . $unit . ';';
+        }
+
+        $color = $settings->{$k . 'color'} ?? '';
+        if (!empty($color)) {
+            $style .= 'border-color:' . $color . ';';
+        }
+
+        $radius = $settings->{$k . 'radius'} ?? '';
+        if ($radius !== '' && $radius !== null && $radius !== false) {
+            $unit = $settings->{$k . 'radius_unit'} ?? 'px';
+            $style .= 'border-radius:' . $radius . $unit . ';';
+        }
+
         return $style;
     }
 

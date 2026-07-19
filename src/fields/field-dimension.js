@@ -5,15 +5,25 @@ const UNITS = [ 'px', 'em', '%', 'rem', 'vw', 'vh' ];
 
 export default function FieldDimension( { field, value, onChange } ) {
 	const k = field.key;
+	const linked = !! value[ k + '_linked' ];
+
 	function sub( suffix, val ) {
-		onChange( { [ k + suffix ]: val } );
+		if ( linked && suffix.startsWith( '_' ) && suffix !== '_linked' && suffix !== '_unit' ) {
+			const updates = {};
+			SIDES.forEach( ( s ) => {
+				updates[ k + '_' + s ] = val;
+			} );
+			onChange( updates );
+		} else {
+			onChange( { [ k + suffix ]: val } );
+		}
 	}
 
 	return createElement( 'div', { className: 'lz-field-dimension' },
 		createElement( 'label', { className: 'lz-field-inline-label' },
 			createElement( 'input', {
 				type: 'checkbox', className: 'lz-field-checkbox',
-				checked: !! value[ k + '_linked' ],
+				checked: linked,
 				onChange: ( e ) => sub( '_linked', e.target.checked ? '1' : '' ),
 			} ), ' Link all sides',
 		),
