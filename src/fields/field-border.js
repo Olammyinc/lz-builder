@@ -1,4 +1,4 @@
-import { createElement } from '@wordpress/element';
+import { createElement, useRef } from '@wordpress/element';
 
 const STYLES = [ '', 'solid', 'dashed', 'dotted', 'double' ];
 const WIDTH_UNITS = [ 'px', 'em' ];
@@ -6,6 +6,8 @@ const RADIUS_UNITS = [ 'px', '%', 'em' ];
 
 export default function FieldBorder( { field, value, onChange } ) {
 	const k = field.key;
+	const colorVal = value[ k + '_color' ] || 'transparent';
+	const swatchRef = useRef( null );
 
 	function sub( suffix, val ) {
 		onChange( { [ k + suffix ]: val } );
@@ -47,6 +49,22 @@ export default function FieldBorder( { field, value, onChange } ) {
 				placeholder: '#000000',
 				onInput: ( e ) => sub( '_color', e.target.value ),
 			} ),
+			createElement( 'span', {
+				ref: swatchRef,
+				className: 'lz-color-swatch',
+				style: { backgroundColor: colorVal },
+				tabIndex: 0, role: 'button',
+				onClick: () => {
+					const native = swatchRef.current?.querySelector( 'input[type="color"]' );
+					if ( native ) native.click();
+				},
+			},
+				createElement( 'input', {
+					type: 'color', className: 'lz-field-color-native',
+					value: colorVal,
+					onInput: ( e ) => sub( '_color', e.target.value ),
+				} ),
+			),
 		),
 		createElement( 'label', { className: 'lz-field-sub-label' }, 'Radius' ),
 		createElement( 'div', { className: 'lz-field-unit-wrap' },

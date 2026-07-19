@@ -179,6 +179,33 @@ class LZ_CSS_Accumulator {
         }
     }
 
+    /**
+     * Build dimension CSS as an inline style string for frontend renderers.
+     */
+    public static function build_dimension_inline(\stdClass $settings, string $key): string {
+        $prefix = $key . '_';
+        $unit   = $settings->{$prefix . 'unit'} ?? 'px';
+        $linked = $settings->{$prefix . 'linked'} ?? false;
+
+        if ($linked) {
+            $value = $settings->{$prefix . 'top'} ?? '';
+            if ($value !== '' && $value !== null && $value !== false) {
+                return esc_attr($key) . ':' . esc_attr($value . $unit) . ';';
+            }
+            return '';
+        }
+
+        $style = '';
+        $sides = ['top', 'right', 'bottom', 'left'];
+        foreach ($sides as $side) {
+            $val = $settings->{$prefix . $side} ?? '';
+            if ($val !== '' && $val !== null && $val !== false) {
+                $style .= esc_attr($key . '-' . $side) . ':' . esc_attr($val . $unit) . ';';
+            }
+        }
+        return $style;
+    }
+
     public static function render(): string {
         $output = '';
         $breakpoints = [self::BREAKPOINT_DEFAULT, self::BREAKPOINT_TABLET, self::BREAKPOINT_PHONE];

@@ -64,15 +64,13 @@ class Heading extends LZ_Module_Base {
                                 'type' => 'border',
                                 'label' => __('Border', 'lz-builder'),
                             ],
-                            'margin_top' => [
-                                'type' => 'unit',
-                                'label' => __('Margin Top', 'lz-builder'),
-                                'units' => ['px', 'em', '%'],
+                            'margin' => [
+                                'type' => 'dimension',
+                                'label' => __('Margin', 'lz-builder'),
                             ],
-                            'margin_bottom' => [
-                                'type' => 'unit',
-                                'label' => __('Margin Bottom', 'lz-builder'),
-                                'units' => ['px', 'em', '%'],
+                            'padding' => [
+                                'type' => 'dimension',
+                                'label' => __('Padding', 'lz-builder'),
                             ],
                         ],
                     ],
@@ -102,16 +100,9 @@ class Heading extends LZ_Module_Base {
         }
 
         LZ_CSS_Accumulator::typography($selector, $settings, 'typography');
-
-        if (isset($settings->margin_top) && $settings->margin_top !== '') {
-            $unit = isset($settings->margin_top_unit) ? $settings->margin_top_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($selector, 'margin-top', $settings->margin_top . $unit);
-        }
-
-        if (isset($settings->margin_bottom) && $settings->margin_bottom !== '') {
-            $unit = isset($settings->margin_bottom_unit) ? $settings->margin_bottom_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($selector, 'margin-bottom', $settings->margin_bottom . $unit);
-        }
+        LZ_CSS_Accumulator::border($selector, $settings, 'border');
+        LZ_CSS_Accumulator::dimension($selector, $settings, 'margin');
+        LZ_CSS_Accumulator::dimension($selector, $settings, 'padding');
 
         return [];
     }

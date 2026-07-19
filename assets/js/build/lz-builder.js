@@ -1181,6 +1181,8 @@ function FieldBorder({
   onChange
 }) {
   const k = field.key;
+  const colorVal = value[k + '_color'] || 'transparent';
+  const swatchRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
   function sub(suffix, val) {
     onChange({
       [k + suffix]: val
@@ -1224,7 +1226,24 @@ function FieldBorder({
     value: value[k + '_color'] || '',
     placeholder: '#000000',
     onInput: e => sub('_color', e.target.value)
-  })), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('label', {
+  }), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('span', {
+    ref: swatchRef,
+    className: 'lz-color-swatch',
+    style: {
+      backgroundColor: colorVal
+    },
+    tabIndex: 0,
+    role: 'button',
+    onClick: () => {
+      const native = swatchRef.current?.querySelector('input[type="color"]');
+      if (native) native.click();
+    }
+  }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('input', {
+    type: 'color',
+    className: 'lz-field-color-native',
+    value: colorVal,
+    onInput: e => sub('_color', e.target.value)
+  }))), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('label', {
     className: 'lz-field-sub-label'
   }, 'Radius'), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-field-unit-wrap'

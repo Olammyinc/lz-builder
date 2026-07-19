@@ -63,15 +63,9 @@ class Photo extends LZ_Module_Base {
                     [
                         'title' => __('Spacing', 'lz-builder'),
                         'fields' => [
-                            'margin_top' => [
-                                'type' => 'unit',
-                                'label' => __('Margin Top', 'lz-builder'),
-                                'units' => ['px', 'em', '%'],
-                            ],
-                            'margin_bottom' => [
-                                'type' => 'unit',
-                                'label' => __('Margin Bottom', 'lz-builder'),
-                                'units' => ['px', 'em', '%'],
+                            'margin' => [
+                                'type' => 'dimension',
+                                'label' => __('Margin', 'lz-builder'),
                             ],
                         ],
                     ],
@@ -102,15 +96,7 @@ class Photo extends LZ_Module_Base {
             LZ_CSS_Accumulator::add_rule($img_selector, 'border-radius', $settings->border_radius . $unit);
         }
 
-        if (isset($settings->margin_top) && $settings->margin_top !== '') {
-            $unit = isset($settings->margin_top_unit) ? $settings->margin_top_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($selector, 'margin-top', $settings->margin_top . $unit);
-        }
-
-        if (isset($settings->margin_bottom) && $settings->margin_bottom !== '') {
-            $unit = isset($settings->margin_bottom_unit) ? $settings->margin_bottom_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($selector, 'margin-bottom', $settings->margin_bottom . $unit);
-        }
+        LZ_CSS_Accumulator::dimension($selector, $settings, 'margin');
 
         return [];
     }
