@@ -2,6 +2,11 @@ import { createElement, useState, useEffect, useCallback, useRef } from '@wordpr
 import { lzFetch } from '../api';
 import registry from '../fields/registry';
 
+const COMPOUND_TYPES = new Set( [
+	'typography', 'border', 'dimension', 'spacing', 'link',
+	'shadow', 'gradient', 'video', 'form',
+] );
+
 export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispatch } ) {
 	const [ schema, setSchema ] = useState( null );
 	const [ values, setValues ] = useState( {} );
@@ -45,16 +50,19 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 		} );
 	}, [ doAutoSave ] );
 
+	const fetchIdRef = useRef( 0 );
+
 	useEffect( () => {
 		if ( ! nodeId ) {
 			setSchema( null );
 			setValues( {} );
 			return;
 		}
+		const fetchId = ++fetchIdRef.current;
 		setLoading( true );
 		setSchema( null );
 		lzFetch( 'get_settings_schema', { node_id: nodeId } ).then( ( r ) => {
-			if ( ! mountedRef.current ) return;
+			if ( ! mountedRef.current || fetchId !== fetchIdRef.current ) return;
 			setLoading( false );
 			if ( r && r.success && r.data ) {
 				setSchema( r.data );
@@ -62,6 +70,8 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 			} else {
 				const msg = ( r && r.data && r.data.message ) || 'Could not load settings.';
 				showNotice( msg, 'error' );
+				setSchema( {} );
+				setValues( {} );
 			}
 		} );
 	}, [ nodeId ] );
@@ -108,7 +118,10 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 						createElement( 'div', { className: 'lz-settings-fields' },
 							...Object.entries( section.fields || {} ).map( ( [ fieldKey, field ] ) => {
 								const FieldComponent = registry[ field.type ];
-								const fieldValue = values[ fieldKey ] !== undefined ? values[ fieldKey ] : field.default;
+								const isCompound = COMPOUND_TYPES.has( field.type );
+								const fieldValue = isCompound
+									? values
+									: ( values[ fieldKey ] !== undefined ? values[ fieldKey ] : ( field.default ?? '' ) );
 
 								const changeHandler = ( val ) => {
 									if ( typeof val === 'object' && val !== null ) {

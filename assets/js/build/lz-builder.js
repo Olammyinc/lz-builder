@@ -564,6 +564,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+const COMPOUND_TYPES = new Set(['typography', 'border', 'dimension', 'spacing', 'link', 'shadow', 'gradient', 'video', 'form']);
 function SettingsPanel({
   nodeId,
   showNotice,
@@ -620,18 +621,20 @@ function SettingsPanel({
       return next;
     });
   }, [doAutoSave]);
+  const fetchIdRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(0);
   (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
     if (!nodeId) {
       setSchema(null);
       setValues({});
       return;
     }
+    const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setSchema(null);
     (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('get_settings_schema', {
       node_id: nodeId
     }).then(r => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || fetchId !== fetchIdRef.current) return;
       setLoading(false);
       if (r && r.success && r.data) {
         setSchema(r.data);
@@ -639,6 +642,8 @@ function SettingsPanel({
       } else {
         const msg = r && r.data && r.data.message || 'Could not load settings.';
         showNotice(msg, 'error');
+        setSchema({});
+        setValues({});
       }
     });
   }, [nodeId]);
@@ -687,8 +692,10 @@ function SettingsPanel({
   }, section.title), (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
     className: 'lz-settings-fields'
   }, ...Object.entries(section.fields || {}).map(([fieldKey, field]) => {
+    var _field$default;
     const FieldComponent = _fields_registry__WEBPACK_IMPORTED_MODULE_2__["default"][field.type];
-    const fieldValue = values[fieldKey] !== undefined ? values[fieldKey] : field.default;
+    const isCompound = COMPOUND_TYPES.has(field.type);
+    const fieldValue = isCompound ? values : values[fieldKey] !== undefined ? values[fieldKey] : (_field$default = field.default) !== null && _field$default !== void 0 ? _field$default : '';
     const changeHandler = val => {
       if (typeof val === 'object' && val !== null) {
         handleChange(val);
