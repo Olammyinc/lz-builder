@@ -81,6 +81,26 @@ get_header(); ?>
                 var rowCount = contentArea.querySelectorAll('.lz-row').length;
                 console.log('[lz preview] after innerHTML — modules:', moduleCount, 'columns:', colCount, 'rows:', rowCount);
                 console.log('[lz preview] contentArea firstChild:', contentArea.firstChild ? contentArea.firstChild.outerHTML.substring(0, 200) : 'EMPTY');
+                var firstMod = contentArea.querySelector('[data-node-id]');
+                if (firstMod) {
+                    var cs = window.getComputedStyle(firstMod);
+                    console.log('[lz preview] first module computed — display:', cs.display, 'height:', cs.height, 'width:', cs.width, 'visibility:', cs.visibility, 'overflow:', cs.overflow);
+                    console.log('[lz preview] first module outerHTML:', firstMod.outerHTML.substring(0, 200));
+                } else {
+                    console.log('[lz preview] NO data-node-id elements found in DOM');
+                }
+                var frontCSS = document.querySelector('link[href*="lz-builder-frontend"]');
+                console.log('[lz preview] frontend stylesheet loaded:', !!frontCSS, frontCSS ? frontCSS.href : 'NONE');
+                // Check parent chain heights
+                var el = contentArea.firstChild;
+                var chain = [];
+                while (el) {
+                    var ecs = window.getComputedStyle(el);
+                    chain.push((el.className || el.tagName) + ' h:' + ecs.height + ' d:' + ecs.display + ' o:' + ecs.overflow);
+                    el = el.firstElementChild;
+                }
+                console.log('[lz preview] element chain:', chain.join(' > '));
+                console.log('[lz preview] contentArea computed height:', window.getComputedStyle(contentArea).height, 'overflow:', window.getComputedStyle(contentArea).overflow);
             } else {
                 console.error('[lz preview] column NOT found AND no layout fallback — module dropped silently!');
             }
