@@ -1,4 +1,13 @@
 .lz-column {
   position: relative;
-  min-height: 1px;
+  min-height: 30px;
+}
+
+/* In builder preview, make empty modules visible & clickable. */
+.lz-builder-preview [data-node-id] {
+  min-height: 20px;
+  outline: 1px dashed transparent;
+}
+.lz-builder-preview [data-node-id]:hover {
+  outline-color: rgba(99, 102, 241, 0.3);
 }

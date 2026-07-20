@@ -52,17 +52,14 @@ get_header(); ?>
         if (!event.data || !event.data.action) return;
 
         if (event.data.action === 'lz_render_layout' && contentArea && event.data.html) {
-            console.log('[lz preview] lz_render_layout — setting innerHTML, length:', event.data.html.length);
             contentArea.innerHTML = event.data.html;
             bindModuleClickEvents();
             bindColumnDropTargets();
         }
 
         if (event.data.action === 'lz_append_to_column' && event.data.column_id && event.data.html) {
-            console.log('[lz preview] lz_append_to_column — column_id:', event.data.column_id, 'html length:', event.data.html.length, 'has layout:', !!event.data.layout);
             var col = contentArea.querySelector('[data-node="' + event.data.column_id + '"]');
             if (col) {
-                console.log('[lz preview] column found — appending module');
                 var wrapper = document.createElement('div');
                 wrapper.innerHTML = event.data.html.trim();
                 var newEl = wrapper.firstChild;
@@ -70,42 +67,11 @@ get_header(); ?>
                     col.appendChild(newEl);
                     bindModuleClickEvents();
                     bindColumnDropTargets();
-                    var appCs = window.getComputedStyle(newEl);
-                    console.log('[lz preview] appended module — tag:', newEl.tagName, 'display:', appCs.display, 'height:', appCs.height, 'rect top:', newEl.getBoundingClientRect().top, 'visible:', appCs.visibility);
-                    console.log('[lz preview] parent column — innerHTML length:', col.innerHTML.length, 'height:', window.getComputedStyle(col).height, 'rect top:', col.getBoundingClientRect().top);
                 }
             } else if (event.data.layout) {
-                console.log('[lz preview] column NOT found — falling back to full layout render, layout length:', event.data.layout.length);
                 contentArea.innerHTML = event.data.layout;
                 bindModuleClickEvents();
                 bindColumnDropTargets();
-                var moduleCount = contentArea.querySelectorAll('[data-node-id]').length;
-                var colCount = contentArea.querySelectorAll('[data-node]').length;
-                var rowCount = contentArea.querySelectorAll('.lz-row').length;
-                console.log('[lz preview] after innerHTML — modules:', moduleCount, 'columns:', colCount, 'rows:', rowCount);
-                console.log('[lz preview] contentArea firstChild:', contentArea.firstChild ? contentArea.firstChild.outerHTML.substring(0, 200) : 'EMPTY');
-                var firstMod = contentArea.querySelector('[data-node-id]');
-                if (firstMod) {
-                    var cs = window.getComputedStyle(firstMod);
-                    console.log('[lz preview] first module computed — display:', cs.display, 'height:', cs.height, 'width:', cs.width, 'visibility:', cs.visibility, 'overflow:', cs.overflow);
-                    console.log('[lz preview] first module outerHTML:', firstMod.outerHTML.substring(0, 200));
-                } else {
-                    console.log('[lz preview] NO data-node-id elements found in DOM');
-                }
-                var frontCSS = document.querySelector('link[href*="lz-builder-frontend"]');
-                console.log('[lz preview] frontend stylesheet loaded:', !!frontCSS, frontCSS ? frontCSS.href : 'NONE');
-                // Check parent chain heights
-                var el = contentArea.firstChild;
-                var chain = [];
-                while (el) {
-                    var ecs = window.getComputedStyle(el);
-                    chain.push((el.className || el.tagName) + ' h:' + ecs.height + ' d:' + ecs.display + ' o:' + ecs.overflow);
-                    el = el.firstElementChild;
-                }
-                console.log('[lz preview] element chain:', chain.join(' > '));
-                console.log('[lz preview] contentArea computed height:', window.getComputedStyle(contentArea).height, 'overflow:', window.getComputedStyle(contentArea).overflow);
-            } else {
-                console.error('[lz preview] column NOT found AND no layout fallback — module dropped silently!');
             }
         }
 
@@ -124,7 +90,6 @@ get_header(); ?>
         }
     });
 
-    // Per-column drop targets so the parent sends parent_id/position.
     function bindColumnDropTargets() {
         var cols = contentArea.querySelectorAll('.lz-column');
         for (var i = 0; i < cols.length; i++) {

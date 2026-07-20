@@ -1,5 +1,6 @@
 .lz-row {
   position: relative;
+  min-height: 30px;
 }
 
 .lz-row-fixed > .lz-col-group {
@@ -10,4 +11,5 @@
 .lz-col-group {
   display: flex;
   flex-wrap: wrap;
+  min-height: 30px;
 }

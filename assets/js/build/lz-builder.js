@@ -259,7 +259,6 @@ function Canvas({
       (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('add_module', {
         module: slug
       }).then(r => {
-        console.log('[lz parent] (drop) add_module — success:', r && r.success, 'html:', !!(r && r.data && r.data.html), 'parent_id:', r && r.data && r.data.parent_id, 'layout:', !!(r && r.data && r.data.layout));
         if (r && r.success) {
           if (r.data && r.data.html && r.data.parent_id) {
             postToIframe({
@@ -395,10 +394,8 @@ function ModuleList({
     (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('add_module', {
       module: slug
     }).then(r => {
-      console.log('[lz parent] add_module response — success:', r && r.success, 'has html:', !!(r && r.data && r.data.html), 'has parent_id:', !!(r && r.data && r.data.parent_id), 'parent_id value:', r && r.data && r.data.parent_id, 'has layout:', !!(r && r.data && r.data.layout), 'layout length:', r && r.data && r.data.layout && r.data.layout.length, 'layout preview:', r && r.data && r.data.layout && r.data.layout.substring(0, 120));
       if (r && r.success) {
         if (r.data && r.data.html && r.data.parent_id) {
-          console.log('[lz parent] sending lz_append_to_column — column_id:', r.data.parent_id, 'html len:', r.data.html.length, 'layout len:', r.data.layout && r.data.layout.length);
           postToIframe({
             action: 'lz_append_to_column',
             column_id: r.data.parent_id,
@@ -406,10 +403,7 @@ function ModuleList({
             layout: r.data.layout
           });
         } else if (r.data.layout) {
-          console.log('[lz parent] sending lz_render_layout (full re-render)');
           updatePreview(r.data.layout);
-        } else {
-          console.error('[lz parent] no html+parent_id AND no layout — cannot update preview!');
         }
         dispatch({
           type: 'SET_UNSAVED',
