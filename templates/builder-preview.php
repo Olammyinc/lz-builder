@@ -76,6 +76,11 @@ get_header(); ?>
                 contentArea.innerHTML = event.data.layout;
                 bindModuleClickEvents();
                 bindColumnDropTargets();
+                var moduleCount = contentArea.querySelectorAll('[data-node-id]').length;
+                var colCount = contentArea.querySelectorAll('[data-node]').length;
+                var rowCount = contentArea.querySelectorAll('.lz-row').length;
+                console.log('[lz preview] after innerHTML — modules:', moduleCount, 'columns:', colCount, 'rows:', rowCount);
+                console.log('[lz preview] contentArea firstChild:', contentArea.firstChild ? contentArea.firstChild.outerHTML.substring(0, 200) : 'EMPTY');
             } else {
                 console.error('[lz preview] column NOT found AND no layout fallback — module dropped silently!');
             }
