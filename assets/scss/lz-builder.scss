@@ -452,13 +452,22 @@ body.lz-builder-active {
 .lz-field-select,
 .lz-field-textarea {
     width: 100%;
-    padding: 7px 10px;
+    padding: 7px 28px 7px 10px;
     border: 1px solid var(--lz-border);
     border-radius: 5px;
     font-size: 13px;
     outline: none;
     transition: border-color var(--lz-transition);
     font-family: inherit;
+}
+.lz-field-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--lz-surface);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
 }
 
 .lz-field-input:focus,
@@ -652,6 +661,12 @@ body.lz-builder-active {
     background: var(--lz-surface-secondary);
     cursor: pointer;
     outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2364748b'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    padding-right: 16px;
     text-align: center;
 }
 

@@ -29,7 +29,7 @@ import FieldForm from './field-form';
 const registry = {
 	text: FieldText,
 	textarea: FieldTextarea,
-	editor: FieldTextarea,
+	// 'editor' is server-rendered via render_settings_form (needs wp_editor/TinyMCE).
 	select: FieldSelect,
 	color: FieldColor,
 	checkbox: FieldCheckbox,

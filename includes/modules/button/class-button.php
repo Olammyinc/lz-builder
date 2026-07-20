@@ -8,7 +8,7 @@ class Button extends LZ_Module_Base {
     protected string $slug = 'button';
     protected string $name = 'Button';
     protected string $category = 'content';
-    protected string $description = 'Add a customizable button.';
+    protected string $description = 'Add a customizable button with a link.';
 
     public function get_settings_form(): array {
         return [
@@ -20,13 +20,18 @@ class Button extends LZ_Module_Base {
                         'fields' => [
                             'text' => [
                                 'type' => 'text',
-                                'label' => __('Button Text', 'lz-builder'),
+                                'label' => __('Text', 'lz-builder'),
                                 'default' => 'Click Here',
                             ],
                             'link' => [
                                 'type' => 'link',
                                 'label' => __('Link', 'lz-builder'),
                             ],
+                        ],
+                    ],
+                    [
+                        'title' => __('Appearance', 'lz-builder'),
+                        'fields' => [
                             'style' => [
                                 'type' => 'select',
                                 'label' => __('Style', 'lz-builder'),
@@ -38,7 +43,7 @@ class Button extends LZ_Module_Base {
                                 ],
                             ],
                             'size' => [
-                                'type' => 'button-group',
+                                'type' => 'select',
                                 'label' => __('Size', 'lz-builder'),
                                 'default' => 'medium',
                                 'options' => [
@@ -93,41 +98,18 @@ class Button extends LZ_Module_Base {
                                 'type' => 'border',
                                 'label' => __('Border', 'lz-builder'),
                             ],
-                            'border_radius' => [
-                                'type' => 'unit',
-                                'label' => __('Border Radius', 'lz-builder'),
-                                'default' => 4,
-                                'units' => ['px', 'em'],
-                                'default_unit' => 'px',
-                            ],
-                            'padding_vertical' => [
-                                'type' => 'unit',
-                                'label' => __('Padding Vertical', 'lz-builder'),
-                                'default' => 10,
-                                'units' => ['px', 'em'],
-                                'default_unit' => 'px',
-                            ],
-                            'padding_horizontal' => [
-                                'type' => 'unit',
-                                'label' => __('Padding Horizontal', 'lz-builder'),
-                                'default' => 20,
-                                'units' => ['px', 'em'],
-                                'default_unit' => 'px',
+                            'padding' => [
+                                'type' => 'dimension',
+                                'label' => __('Padding', 'lz-builder'),
                             ],
                         ],
                     ],
                     [
                         'title' => __('Spacing', 'lz-builder'),
                         'fields' => [
-                            'margin_top' => [
-                                'type' => 'unit',
-                                'label' => __('Margin Top', 'lz-builder'),
-                                'units' => ['px', 'em', '%'],
-                            ],
-                            'margin_bottom' => [
-                                'type' => 'unit',
-                                'label' => __('Margin Bottom', 'lz-builder'),
-                                'units' => ['px', 'em', '%'],
+                            'margin' => [
+                                'type' => 'dimension',
+                                'label' => __('Margin', 'lz-builder'),
                             ],
                         ],
                     ],
@@ -147,43 +129,28 @@ class Button extends LZ_Module_Base {
 
     public function get_css(\stdClass $node, \stdClass $settings): array {
         $wrap_selector = '.lz-node-' . $node->node_id . '.lz-button-wrap';
-        $btn_selector = '.lz-node-' . $node->node_id . '.lz-button';
         $btn_sel2 = '.lz-button.lz-node-' . $node->node_id;
 
         if (!empty($settings->alignment)) {
             LZ_CSS_Accumulator::add_rule($wrap_selector, 'text-align', $settings->alignment);
         }
 
-        $bg = !empty($settings->background_color) ? $settings->background_color : '#007cba';
-        $tc = !empty($settings->text_color) ? $settings->text_color : '#ffffff';
+        $bg    = !empty($settings->background_color) ? $settings->background_color : '#007cba';
+        $tc    = !empty($settings->text_color) ? $settings->text_color : '#ffffff';
+        $style = $settings->style ?? 'flat';
 
-        if ($settings->style === 'flat' || empty($settings->style)) {
+        if ($style === 'flat' || empty($settings->style)) {
             LZ_CSS_Accumulator::add_rule($btn_sel2, 'background', $bg);
-        } elseif ($settings->style === 'outlined') {
+        } elseif ($style === 'gradient') {
+            LZ_CSS_Accumulator::add_rule($btn_sel2, 'background', 'linear-gradient(135deg,' . $bg . ', ' . $bg . 'dd)');
+        } elseif ($style === 'outlined') {
             LZ_CSS_Accumulator::add_rule($btn_sel2, 'background', 'transparent');
             LZ_CSS_Accumulator::add_rule($btn_sel2, 'border', '2px solid ' . $bg);
             LZ_CSS_Accumulator::add_rule($btn_sel2, 'color', $bg);
         }
 
-        if ($settings->style !== 'outlined') {
+        if ($style !== 'outlined') {
             LZ_CSS_Accumulator::add_rule($btn_sel2, 'color', $tc);
-        }
-
-        if (isset($settings->border_radius) && $settings->border_radius !== '' && $settings->border_radius !== null) {
-            $unit = isset($settings->border_radius_unit) ? $settings->border_radius_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($btn_sel2, 'border-radius', $settings->border_radius . $unit);
-        }
-
-        if (isset($settings->padding_vertical) && $settings->padding_vertical !== '') {
-            $unit = isset($settings->padding_vertical_unit) ? $settings->padding_vertical_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($btn_sel2, 'padding-top', $settings->padding_vertical . $unit);
-            LZ_CSS_Accumulator::add_rule($btn_sel2, 'padding-bottom', $settings->padding_vertical . $unit);
-        }
-
-        if (isset($settings->padding_horizontal) && $settings->padding_horizontal !== '') {
-            $unit = isset($settings->padding_horizontal_unit) ? $settings->padding_horizontal_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($btn_sel2, 'padding-left', $settings->padding_horizontal . $unit);
-            LZ_CSS_Accumulator::add_rule($btn_sel2, 'padding-right', $settings->padding_horizontal . $unit);
         }
 
         if (!empty($settings->width)) {
@@ -198,15 +165,9 @@ class Button extends LZ_Module_Base {
             }
         }
 
-        if (isset($settings->margin_top) && $settings->margin_top !== '') {
-            $unit = isset($settings->margin_top_unit) ? $settings->margin_top_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($wrap_selector, 'margin-top', $settings->margin_top . $unit);
-        }
-
-        if (isset($settings->margin_bottom) && $settings->margin_bottom !== '') {
-            $unit = isset($settings->margin_bottom_unit) ? $settings->margin_bottom_unit : 'px';
-            LZ_CSS_Accumulator::add_rule($wrap_selector, 'margin-bottom', $settings->margin_bottom . $unit);
-        }
+        LZ_CSS_Accumulator::border($btn_sel2, $settings, 'border');
+        LZ_CSS_Accumulator::dimension($btn_sel2, $settings, 'padding');
+        LZ_CSS_Accumulator::dimension($wrap_selector, $settings, 'margin');
 
         return [];
     }

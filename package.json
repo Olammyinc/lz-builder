@@ -1,6 +1,6 @@
 {
   "name": "lz-builder",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "private": true,
   "scripts": {
     "build": "wp-scripts build && npm run build:css",

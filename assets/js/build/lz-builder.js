@@ -564,6 +564,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+const SERVER_RENDERED_TYPES = new Set(['editor']);
 const COMPOUND_TYPES = new Set(['typography', 'border', 'dimension', 'spacing', 'link', 'shadow', 'gradient', 'video', 'form']);
 function SettingsPanel({
   nodeId,
@@ -574,30 +575,49 @@ function SettingsPanel({
   const [schema, setSchema] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
   const [values, setValues] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)({});
   const [loading, setLoading] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [fallbackHtml, setFallbackHtml] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
   const autoSaveTimerRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const pendingRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
   const mountedRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(true);
+  const fetchIdRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(0);
+  const inFlightRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(false);
+  const flushSave = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(entry => {
+    clearTimeout(autoSaveTimerRef.current);
+    if (!entry || !entry.target || inFlightRef.current) return;
+    inFlightRef.current = true;
+    (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('save_settings', {
+      node_id: entry.target,
+      settings: entry.values
+    }).then(r => {
+      inFlightRef.current = false;
+      if (!mountedRef.current) return;
+      if (r && r.success && r.data && r.data.html) {
+        dispatch({
+          type: 'SET_UNSAVED',
+          value: true
+        });
+        postToIframe({
+          action: 'lz_replace_module',
+          node_id: entry.target,
+          html: r.data.html
+        });
+      }
+    }).catch(() => {
+      inFlightRef.current = false;
+    });
+    pendingRef.current = null;
+  }, [postToIframe, dispatch]);
   const doAutoSave = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(newValues => {
+    pendingRef.current = {
+      target: nodeId,
+      values: newValues
+    };
     clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
-      (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('save_settings', {
-        node_id: nodeId,
-        settings: newValues
-      }).then(r => {
-        if (r && r.success && r.data && r.data.html) {
-          dispatch({
-            type: 'SET_UNSAVED',
-            value: true
-          });
-          postToIframe({
-            action: 'lz_replace_module',
-            node_id: nodeId,
-            html: r.data.html
-          });
-        }
-      });
+      if (pendingRef.current) flushSave(pendingRef.current);
     }, 300);
-  }, [nodeId, postToIframe, dispatch]);
+  }, [nodeId, flushSave]);
   const handleChange = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(change => {
     setValues(prev => {
       if (typeof change === 'object' && change !== null) {
@@ -621,24 +641,50 @@ function SettingsPanel({
       return next;
     });
   }, [doAutoSave]);
-  const fetchIdRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(0);
+  const needsServerRender = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(schemaData => {
+    if (!schemaData || !schemaData.tabs) return false;
+    for (const tab of schemaData.tabs) {
+      for (const section of tab.sections || []) {
+        for (const field of Object.values(section.fields || {})) {
+          if (SERVER_RENDERED_TYPES.has(field.type)) return true;
+        }
+      }
+    }
+    return false;
+  }, []);
   (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
     if (!nodeId) {
       setSchema(null);
       setValues({});
+      setFallbackHtml(null);
+      pendingRef.current = null;
       return;
     }
     const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setSchema(null);
+    setFallbackHtml(null);
+    pendingRef.current = null;
     (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('get_settings_schema', {
       node_id: nodeId
     }).then(r => {
       if (!mountedRef.current || fetchId !== fetchIdRef.current) return;
       setLoading(false);
       if (r && r.success && r.data) {
-        setSchema(r.data);
-        setValues(r.data.values || {});
+        if (needsServerRender(r.data)) {
+          const capturedId = fetchId;
+          (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('render_settings_form', {
+            node_id: nodeId
+          }).then(formR => {
+            if (!mountedRef.current || capturedId !== fetchIdRef.current) return;
+            if (formR && formR.success && formR.data && formR.data.html) {
+              setFallbackHtml(formR.data.html);
+            }
+          });
+        } else {
+          setSchema(r.data);
+          setValues(r.data.values || {});
+        }
       } else {
         const msg = r && r.data && r.data.message || 'Could not load settings.';
         showNotice(msg, 'error');
@@ -646,20 +692,35 @@ function SettingsPanel({
         setValues({});
       }
     });
-  }, [nodeId]);
+  }, [nodeId, needsServerRender]);
   (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
     mountedRef.current = true;
     return () => {
+      if (pendingRef.current && !inFlightRef.current) {
+        flushSave(pendingRef.current);
+      }
       mountedRef.current = false;
-      clearTimeout(autoSaveTimerRef.current);
     };
-  }, []);
+  }, [nodeId, flushSave]);
   if (!nodeId) {
     return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
       className: 'lz-action-panel'
     }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('p', null, 'Select a module on the page to edit its settings.'));
   }
-  if (loading || !schema) {
+  if (loading) {
+    return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+      className: 'lz-action-panel'
+    }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('p', null, 'Loading settings\u2026'));
+  }
+  if (fallbackHtml) {
+    return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
+      className: 'lz-settings-panel',
+      dangerouslySetInnerHTML: {
+        __html: fallbackHtml
+      }
+    });
+  }
+  if (!schema) {
     return (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('div', {
       className: 'lz-action-panel'
     }, (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.createElement)('p', null, 'Loading settings\u2026'));
@@ -675,7 +736,7 @@ function SettingsPanel({
     className: 'lz-btn lz-btn-back',
     onClick: e => {
       e.preventDefault();
-      clearTimeout(autoSaveTimerRef.current);
+      if (pendingRef.current) flushSave(pendingRef.current);
       dispatch({
         type: 'BACK_TO_MODULES'
       });
@@ -724,10 +785,10 @@ function SettingsPanel({
     type: 'button',
     className: 'lz-btn lz-btn-primary lz-btn-save-settings',
     onClick: () => {
-      doAutoSave(values);
+      if (pendingRef.current) flushSave(pendingRef.current);
       setTimeout(() => dispatch({
         type: 'BACK_TO_MODULES'
-      }), 400);
+      }), 100);
     }
   }, 'Save')));
 }
@@ -2471,7 +2532,7 @@ __webpack_require__.r(__webpack_exports__);
 const registry = {
   text: _field_text__WEBPACK_IMPORTED_MODULE_0__["default"],
   textarea: _field_textarea__WEBPACK_IMPORTED_MODULE_1__["default"],
-  editor: _field_textarea__WEBPACK_IMPORTED_MODULE_1__["default"],
+  // 'editor' is server-rendered via render_settings_form (needs wp_editor/TinyMCE).
   select: _field_select__WEBPACK_IMPORTED_MODULE_2__["default"],
   color: _field_color__WEBPACK_IMPORTED_MODULE_3__["default"],
   checkbox: _field_checkbox__WEBPACK_IMPORTED_MODULE_4__["default"],

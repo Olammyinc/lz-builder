@@ -196,6 +196,22 @@ class LZ_CSS_Accumulator {
         }
         $linked = $settings->{$prefix . 'linked'} ?? false;
 
+        // Fallback for old vertical/horizontal format (e.g. padding_vertical → padding_top + padding_bottom).
+        $has_sides = isset($settings->{$prefix . 'top'}) || isset($settings->{$prefix . 'right'})
+                   || isset($settings->{$prefix . 'bottom'}) || isset($settings->{$prefix . 'left'});
+        if (!$has_sides) {
+            $v = $settings->{$prefix . 'vertical'} ?? '';
+            $h = $settings->{$prefix . 'horizontal'} ?? '';
+            $style = '';
+            if ($v !== '' && $v !== null && $v !== false) {
+                $style .= $key . '-top:' . $v . $unit . ';' . $key . '-bottom:' . $v . $unit . ';';
+            }
+            if ($h !== '' && $h !== null && $h !== false) {
+                $style .= $key . '-left:' . $h . $unit . ';' . $key . '-right:' . $h . $unit . ';';
+            }
+            return $style;
+        }
+
         if ($linked) {
             $value = $settings->{$prefix . 'top'} ?? '';
             if ($value !== '' && $value !== null && $value !== false) {

@@ -2,6 +2,8 @@ import { createElement, useState, useEffect, useCallback, useRef } from '@wordpr
 import { lzFetch } from '../api';
 import registry from '../fields/registry';
 
+const SERVER_RENDERED_TYPES = new Set( [ 'editor' ] );
+
 const COMPOUND_TYPES = new Set( [
 	'typography', 'border', 'dimension', 'spacing', 'link',
 	'shadow', 'gradient', 'video', 'form',
@@ -11,25 +13,42 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 	const [ schema, setSchema ] = useState( null );
 	const [ values, setValues ] = useState( {} );
 	const [ loading, setLoading ] = useState( false );
+	const [ fallbackHtml, setFallbackHtml ] = useState( null );
 	const autoSaveTimerRef = useRef( null );
+	const pendingRef = useRef( null );
 	const mountedRef = useRef( true );
+	const fetchIdRef = useRef( 0 );
+	const inFlightRef = useRef( false );
+
+	const flushSave = useCallback( ( entry ) => {
+		clearTimeout( autoSaveTimerRef.current );
+		if ( ! entry || ! entry.target || inFlightRef.current ) return;
+		inFlightRef.current = true;
+		lzFetch( 'save_settings', { node_id: entry.target, settings: entry.values } ).then( ( r ) => {
+			inFlightRef.current = false;
+			if ( ! mountedRef.current ) return;
+			if ( r && r.success && r.data && r.data.html ) {
+				dispatch( { type: 'SET_UNSAVED', value: true } );
+				postToIframe( {
+					action: 'lz_replace_module',
+					node_id: entry.target,
+					html: r.data.html,
+				} );
+			}
+		} ).catch( () => {
+			inFlightRef.current = false;
+		} );
+		pendingRef.current = null;
+	}, [ postToIframe, dispatch ] );
 
 	const doAutoSave = useCallback( ( newValues ) => {
+		pendingRef.current = { target: nodeId, values: newValues };
 		clearTimeout( autoSaveTimerRef.current );
 		autoSaveTimerRef.current = setTimeout( () => {
 			if ( ! mountedRef.current ) return;
-			lzFetch( 'save_settings', { node_id: nodeId, settings: newValues } ).then( ( r ) => {
-				if ( r && r.success && r.data && r.data.html ) {
-					dispatch( { type: 'SET_UNSAVED', value: true } );
-					postToIframe( {
-						action: 'lz_replace_module',
-						node_id: nodeId,
-						html: r.data.html,
-					} );
-				}
-			} );
+			if ( pendingRef.current ) flushSave( pendingRef.current );
 		}, 300 );
-	}, [ nodeId, postToIframe, dispatch ] );
+	}, [ nodeId, flushSave ] );
 
 	const handleChange = useCallback( ( change ) => {
 		setValues( ( prev ) => {
@@ -50,23 +69,47 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 		} );
 	}, [ doAutoSave ] );
 
-	const fetchIdRef = useRef( 0 );
+	const needsServerRender = useCallback( ( schemaData ) => {
+		if ( ! schemaData || ! schemaData.tabs ) return false;
+		for ( const tab of schemaData.tabs ) {
+			for ( const section of tab.sections || [] ) {
+				for ( const field of Object.values( section.fields || {} ) ) {
+					if ( SERVER_RENDERED_TYPES.has( field.type ) ) return true;
+				}
+			}
+		}
+		return false;
+	}, [] );
 
 	useEffect( () => {
 		if ( ! nodeId ) {
 			setSchema( null );
 			setValues( {} );
+			setFallbackHtml( null );
+			pendingRef.current = null;
 			return;
 		}
 		const fetchId = ++fetchIdRef.current;
 		setLoading( true );
 		setSchema( null );
+		setFallbackHtml( null );
+		pendingRef.current = null;
 		lzFetch( 'get_settings_schema', { node_id: nodeId } ).then( ( r ) => {
 			if ( ! mountedRef.current || fetchId !== fetchIdRef.current ) return;
 			setLoading( false );
 			if ( r && r.success && r.data ) {
-				setSchema( r.data );
-				setValues( r.data.values || {} );
+				if ( needsServerRender( r.data ) ) {
+					const capturedId = fetchId;
+					lzFetch( 'render_settings_form', { node_id: nodeId } ).then( ( formR ) => {
+						if ( ! mountedRef.current || capturedId !== fetchIdRef.current ) return;
+						if ( formR && formR.success && formR.data && formR.data.html ) {
+							setFallbackHtml( formR.data.html );
+						}
+					} );
+				} else {
+					setSchema( r.data );
+					setValues( r.data.values || {} );
+				}
 			} else {
 				const msg = ( r && r.data && r.data.message ) || 'Could not load settings.';
 				showNotice( msg, 'error' );
@@ -74,15 +117,17 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 				setValues( {} );
 			}
 		} );
-	}, [ nodeId ] );
+	}, [ nodeId, needsServerRender ] );
 
 	useEffect( () => {
 		mountedRef.current = true;
 		return () => {
+			if ( pendingRef.current && ! inFlightRef.current ) {
+				flushSave( pendingRef.current );
+			}
 			mountedRef.current = false;
-			clearTimeout( autoSaveTimerRef.current );
 		};
-	}, [] );
+	}, [ nodeId, flushSave ] );
 
 	if ( ! nodeId ) {
 		return createElement( 'div', { className: 'lz-action-panel' },
@@ -90,7 +135,20 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 		);
 	}
 
-	if ( loading || ! schema ) {
+	if ( loading ) {
+		return createElement( 'div', { className: 'lz-action-panel' },
+			createElement( 'p', null, 'Loading settings\u2026' ),
+		);
+	}
+
+	if ( fallbackHtml ) {
+		return createElement( 'div', {
+			className: 'lz-settings-panel',
+			dangerouslySetInnerHTML: { __html: fallbackHtml },
+		} );
+	}
+
+	if ( ! schema ) {
 		return createElement( 'div', { className: 'lz-action-panel' },
 			createElement( 'p', null, 'Loading settings\u2026' ),
 		);
@@ -104,7 +162,7 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 				className: 'lz-btn lz-btn-back',
 				onClick: ( e ) => {
 					e.preventDefault();
-					clearTimeout( autoSaveTimerRef.current );
+					if ( pendingRef.current ) flushSave( pendingRef.current );
 					dispatch( { type: 'BACK_TO_MODULES' } );
 				},
 			}, '\u2190 Back' ),
@@ -157,8 +215,8 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 				type: 'button',
 				className: 'lz-btn lz-btn-primary lz-btn-save-settings',
 				onClick: () => {
-					doAutoSave( values );
-					setTimeout( () => dispatch( { type: 'BACK_TO_MODULES' } ), 400 );
+					if ( pendingRef.current ) flushSave( pendingRef.current );
+					setTimeout( () => dispatch( { type: 'BACK_TO_MODULES' } ), 100 );
 				},
 			}, 'Save' ),
 		),

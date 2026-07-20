@@ -1,6 +1,9 @@
 # Lz Builder — Project Context
 
-Last updated: 2026-07-19 · **v1.7.2** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
+Last updated: 2026-07-19 · **v1.8.1** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
+
+> **Current task:** Tier 0 corrections — see §0.6. Tier 0 is architecturally accepted; one
+> blocking data-loss bug and one undisclosed downgrade remain. Do not start Tier 1.
 
 ## Direction (read first)
 
@@ -42,6 +45,9 @@ are gitignored.
 | `355600f` | Toast notifications, column-count row icons, instant append-to-column for `add_module` |
 | `7248dab` v1.7.2 | Version bump |
 | `7da13cf` | Columns were missing the `data-node` attribute — root cause of add/drop silently failing |
+| `03cd86d` v1.8.0 | **Tier 0** — client-side settings model replaces `dangerouslySetInnerHTML` |
+| `f553713` | Compound fields: pass full values object so sub-keys resolve; fetch race guard |
+| `5b464cf` / `b46f4b4` v1.8.1 | Border colour swatch, margin/padding as `dimension`, border inline render, link-sides sync, unit fallback |
 
 ### Resolved (verified by code review 2026-07-19)
 
@@ -296,6 +302,47 @@ typography unit video`
 - [ ] Report anything deferred (e.g. editor/photo) explicitly rather than silently
 
 **Do not proceed to Tier 1 until every box above is checked.**
+
+#### 0.6 — Review round 1 (2026-07-19, v1.8.1) — ACCEPTED WITH CORRECTIONS
+
+**Tier 0 is architecturally accepted.** Verified passing: schema endpoint (AJAX + REST) with
+`values` merged over defaults · `preview` hint present and correctly metadata-only (not yet
+consumed in JS) · `SettingsPanel` rewritten with zero `dangerouslySetInnerHTML` /
+`bindColorFields` / `bindButtonGroups` · local state + 300ms debounce ·
+**compound fields correctly keep their flat prefixed keys** (`typography_font_family` etc.) ·
+`render_settings_form` retained as fallback · build current and committed ·
+**no scope creep into Tier 1–3**.
+
+Three corrections before Tier 0 closes:
+
+**1. BLOCKING — silent data loss. Flush pending saves, don't cancel them.**
+`SettingsPanel.js:107` (Back button) and `:83` (unmount cleanup) both `clearTimeout` the pending
+debounced save. Any edit made within the 300ms window is **silently discarded** when the user
+clicks Back or selects another module — the value reverts with no error. Unmount is
+double-guarded (`clearTimeout` *and* a `mountedRef` early-return), so it cannot fire either way.
+
+Fix: if a save is pending, **flush it immediately** on Back and on unmount instead of clearing
+it. Also flush on the Save button — it currently relies on a 300ms debounce beating a 400ms
+navigate, a 100ms margin that inverts under a throttled tab.
+
+**2. Report, don't silently downgrade — the `editor` field type.**
+`registry.js` maps `editor: FieldTextarea`, so the **Text Editor module lost its WYSIWYG**. The
+spec permitted deferring TinyMCE but required saying so; this shipped unannounced. Either:
+(a) keep `editor` on the server-rendered `render_settings_form` path so `wp_editor()` still
+applies, or (b) state plainly here that rich text is deferred, and why. Do **not** leave it as an
+unannounced textarea.
+
+*Context:* the old `field-editor.php` only called `wp_editor()` under `is_admin()`, and injected
+via `innerHTML` it likely never initialised TinyMCE properly in the builder anyway — so this may
+be honest rather than a true regression. It still must be a stated decision. Rich text is table
+stakes for a page builder.
+
+**3. Confirm browser verification actually happened.**
+The 0.5 checklist required Chrome **and** Firefox in a real WordPress install: open all 7
+modules, edit every field type, reload, confirm persistence. This cannot be verified from the
+repo. If it was not done, **say so** — do not re-report it as done.
+
+**Do not start Tier 1 until 1 and 2 are merged.**
 
 ### Tier 1 · Makes it *feel* like a builder
 

@@ -17,49 +17,8 @@ if (!empty($valign) && $valign !== 'top') {
     $col_style .= 'display:flex;flex-direction:column;justify-content:' . esc_attr($align_val) . ';';
 }
 
-// Padding (dimension field).
-$padding_top    = $settings->padding_top ?? '';
-$padding_right  = $settings->padding_right ?? '';
-$padding_bottom = $settings->padding_bottom ?? '';
-$padding_left   = $settings->padding_left ?? '';
-$padding_unit   = $settings->padding_unit ?? 'px';
-$padding_linked = $settings->padding_linked ?? false;
-if ($padding_linked && $padding_top !== '' && $padding_top !== null) {
-    $col_style .= 'padding:' . esc_attr($padding_top . $padding_unit) . ';';
-} else {
-    if ($padding_top !== '' && $padding_top !== null) {
-        $col_style .= 'padding-top:' . esc_attr($padding_top . $padding_unit) . ';';
-    }
-    if ($padding_right !== '' && $padding_right !== null) {
-        $col_style .= 'padding-right:' . esc_attr($padding_right . $padding_unit) . ';';
-    }
-    if ($padding_bottom !== '' && $padding_bottom !== null) {
-        $col_style .= 'padding-bottom:' . esc_attr($padding_bottom . $padding_unit) . ';';
-    }
-    if ($padding_left !== '' && $padding_left !== null) {
-        $col_style .= 'padding-left:' . esc_attr($padding_left . $padding_unit) . ';';
-    }
-}
-
-// Border.
-$border_style  = $settings->border_style ?? '';
-$border_width  = $settings->border_width ?? '';
-$border_color  = $settings->border_color ?? '';
-$border_radius = $settings->border_radius ?? '';
-if (!empty($border_style)) {
-    $col_style .= 'border-style:' . esc_attr($border_style) . ';';
-}
-if ($border_width !== '' && $border_width !== null) {
-    $border_width_unit = $settings->border_width_unit ?? 'px';
-    $col_style .= 'border-width:' . esc_attr($border_width . $border_width_unit) . ';';
-}
-if (!empty($border_color)) {
-    $col_style .= 'border-color:' . esc_attr($border_color) . ';';
-}
-if ($border_radius !== '' && $border_radius !== null) {
-    $border_radius_unit = $settings->border_radius_unit ?? 'px';
-    $col_style .= 'border-radius:' . esc_attr($border_radius . $border_radius_unit) . ';';
-}
+$col_style .= \LzBuilder\LZ_CSS_Accumulator::build_dimension_inline($settings, 'padding');
+$col_style .= \LzBuilder\LZ_CSS_Accumulator::build_border_inline($settings, 'border');
 ?>
 <div class="lz-column lz-col-<?php echo esc_attr($size); ?> <?php echo esc_attr($node_class); ?>" data-node="<?php echo esc_attr($node->node_id); ?>" style="<?php echo esc_attr($col_style); ?>">
     <?php
