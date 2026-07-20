@@ -174,6 +174,11 @@ class LZ_AJAX_Handlers {
             $parent_id = LZ_Page_Data::find_last_column($post_id, 'draft');
         }
 
+        if (empty($parent_id)) {
+            LZ_Page_Data::add_row($post_id, '1-col', 0, 'draft');
+            $parent_id = LZ_Page_Data::find_last_column($post_id, 'draft');
+        }
+
         $node_id = LZ_Page_Data::add_module($post_id, $module_slug, $parent_id, $position, 'draft');
         if (is_wp_error($node_id)) {
             wp_send_json_error(['message' => $node_id->get_error_message()]);
@@ -924,6 +929,11 @@ class LZ_AJAX_Handlers {
         }
 
         if (empty($parent_id)) {
+            $parent_id = LZ_Page_Data::find_last_column($post_id, 'draft');
+        }
+
+        if (empty($parent_id)) {
+            LZ_Page_Data::add_row($post_id, '1-col', 0, 'draft');
             $parent_id = LZ_Page_Data::find_last_column($post_id, 'draft');
         }
 

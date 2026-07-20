@@ -42,23 +42,24 @@ $row_style .= \LzBuilder\LZ_CSS_Accumulator::build_dimension_inline($settings, '
 ?>
 <div class="lz-row <?php echo esc_attr($node_class); ?>" style="<?php echo esc_attr($row_style); ?>">
     <?php
-    $children = LZ_Page_Data::get_nodes_by_type('column', $node->node_id);
-    foreach ($children as $child) {
-        $grandchildren = LZ_Page_Data::get_nodes_by_type('column', $child->node_id);
-        if (!empty($grandchildren)) {
-            foreach ($grandchildren as $col) {
-                $col_module = LZ_Module_Registry::get_instance()->get_module('column');
-                if ($col_module) {
-                    $col_settings = isset($col->settings) && is_array($col->settings) ? (object) $col->settings : new \stdClass();
-                    echo $col_module->render($col, $col_settings);
-                }
-            }
-        } else {
-            $col_module = LZ_Module_Registry::get_instance()->get_module('column');
-            if ($col_module) {
-                $col_settings = isset($child->settings) && is_array($child->settings) ? (object) $child->settings : new \stdClass();
-                echo $col_module->render($child, $col_settings);
-            }
+    // Union: group-columns + direct-columns (mirrors render_row).
+    $columns = [];
+    $group_children = LZ_Page_Data::get_nodes_by_type('column-group', $node->node_id);
+    foreach ($group_children as $group) {
+        foreach (LZ_Page_Data::get_nodes_by_type('column', $group->node_id) as $col) {
+            $columns[$col->node_id] = $col;
+        }
+    }
+    foreach (LZ_Page_Data::get_nodes_by_type('column', $node->node_id) as $col) {
+        $columns[$col->node_id] = $col;
+    }
+    $columns = array_values($columns);
+    usort($columns, fn($a, $b) => ($a->position ?? 0) - ($b->position ?? 0));
+    foreach ($columns as $col) {
+        $col_module = LZ_Module_Registry::get_instance()->get_module('column');
+        if ($col_module) {
+            $col_settings = isset($col->settings) && is_array($col->settings) ? (object) $col->settings : new \stdClass();
+            echo $col_module->render($col, $col_settings);
         }
     }
     ?>

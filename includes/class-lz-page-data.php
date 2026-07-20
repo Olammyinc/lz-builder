@@ -88,18 +88,23 @@ class LZ_Page_Data {
         $width_class = ($settings->width ?? 'fixed') === 'full' ? 'lz-row-full' : 'lz-row-fixed';
         $html = '<div class="lz-row ' . $width_class . '" data-node="' . esc_attr($row['node_id']) . '">';
 
-        // Try column-group → column hierarchy (new format).
-        $column_group_children = self::filter_nodes_by_type($all_nodes, 'column-group', $row['node_id']);
+        $seen = [];
         $columns = [];
-        foreach ($column_group_children as $group) {
-            $group_cols = self::filter_nodes_by_type($all_nodes, 'column', $group['node_id']);
-            $columns = array_merge($columns, $group_cols);
+
+        // Collect columns from column-group children.
+        foreach (self::filter_nodes_by_type($all_nodes, 'column-group', $row['node_id']) as $group) {
+            foreach (self::filter_nodes_by_type($all_nodes, 'column', $group['node_id']) as $col) {
+                $columns[$col['node_id']] = $col;
+            }
         }
 
-        // Fallback: direct column children of the row (old format, no column-group layer).
-        if (empty($columns)) {
-            $columns = self::filter_nodes_by_type($all_nodes, 'column', $row['node_id']);
+        // Union with direct column children (old format).
+        foreach (self::filter_nodes_by_type($all_nodes, 'column', $row['node_id']) as $col) {
+            $columns[$col['node_id']] = $col;
         }
+
+        $columns = array_values($columns);
+        usort($columns, fn($a, $b) => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
 
         foreach ($columns as $col) {
             $html .= '<div class="lz-col-group">';
@@ -358,28 +363,19 @@ class LZ_Page_Data {
     public static function add_module(int $post_id, string $module_slug, string $parent_id, int $position = 0, string $status = 'draft'): string {
         $data = self::get_layout_data($post_id, $status);
 
-        // Check whether any column nodes exist at all.
-        $has_columns = false;
-        foreach ($data as $node) {
-            if (($node['type'] ?? '') === 'column') {
-                $has_columns = true;
-                break;
-            }
-        }
-
-        // Auto-create a 1-col row when no columns exist.
-        if (!$has_columns) {
+        // Auto-create a 1-col row if no renderable columns exist (mirroring render_row / find_last_column).
+        if (empty(self::find_last_column($post_id, $status))) {
             $row_id = self::add_row($post_id, '1-col', 0, $status);
             $data = self::get_layout_data($post_id, $status);
             $parent_id = '';
-
             foreach ($data as $node) {
-                if (($node['type'] ?? '') === 'column' && ($node['parent_id'] ?? '') !== '') {
+                if (($node['type'] ?? '') === 'column') {
                     $parent_id = $node['node_id'];
                     break;
                 }
             }
         }
+    }
 
         $node_id = self::generate_node_id();
         $defaults = self::get_module_default_settings($module_slug);
@@ -415,19 +411,29 @@ class LZ_Page_Data {
     public static function find_last_column(int $post_id, string $status = 'draft'): string {
         $data   = self::get_layout_data($post_id, $status);
         $ordered = self::sort_nodes($data);
-
-        // columns with data-node-id attribute returned by serve calls
         $last_column = '';
 
-        // The last column rendered in document order is in the
-        // last row's last column-group's last column.
-        // Walk the ordered output backwards since it's a tree walk
-        // and columns are leaves — the last column node in sorted
-        // order is the rightmost leaf.
-        foreach (array_reverse($ordered) as $node) {
-            if (($node['type'] ?? '') === 'column') {
-                $last_column = $node['node_id'];
-                break;
+        foreach ($ordered as $node) {
+            if (($node['type'] ?? '') !== 'row' || !empty($node['parent_id'])) {
+                continue;
+            }
+            // Mirror render_row(): union group-columns + direct-columns.
+            $row_cols = [];
+            foreach (self::filter_nodes_by_type($data, 'column-group', $node['node_id']) as $group) {
+                foreach (self::filter_nodes_by_type($data, 'column', $group['node_id']) as $col) {
+                    $row_cols[$col['node_id']] = $col;
+                }
+            }
+            foreach (self::filter_nodes_by_type($data, 'column', $node['node_id']) as $col) {
+                $row_cols[$col['node_id']] = $col;
+            }
+            $row_cols = array_values($row_cols);
+            usort($row_cols, fn($a, $b) => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
+            if (!empty($row_cols)) {
+                $last = end($row_cols);
+                if ($last) {
+                    $last_column = $last['node_id'];
+                }
             }
         }
         return $last_column;
