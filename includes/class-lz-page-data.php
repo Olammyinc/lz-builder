@@ -87,20 +87,30 @@ class LZ_Page_Data {
         $settings = isset($row['settings']) ? (object) $row['settings'] : new \stdClass();
         $width_class = ($settings->width ?? 'fixed') === 'full' ? 'lz-row-full' : 'lz-row-fixed';
         $html = '<div class="lz-row ' . $width_class . '" data-node="' . esc_attr($row['node_id']) . '">';
-        $children = self::filter_nodes_by_type($all_nodes, 'column-group', $row['node_id']);
-        foreach ($children as $group) {
+
+        // Try column-group → column hierarchy (new format).
+        $column_group_children = self::filter_nodes_by_type($all_nodes, 'column-group', $row['node_id']);
+        $columns = [];
+        foreach ($column_group_children as $group) {
+            $group_cols = self::filter_nodes_by_type($all_nodes, 'column', $group['node_id']);
+            $columns = array_merge($columns, $group_cols);
+        }
+
+        // Fallback: direct column children of the row (old format, no column-group layer).
+        if (empty($columns)) {
+            $columns = self::filter_nodes_by_type($all_nodes, 'column', $row['node_id']);
+        }
+
+        foreach ($columns as $col) {
             $html .= '<div class="lz-col-group">';
-            $group_children = self::filter_nodes_by_type($all_nodes, 'column', $group['node_id']);
-            foreach ($group_children as $col) {
-                $col_settings = isset($col['settings']) ? (object) $col['settings'] : new \stdClass();
-                $size = $col_settings->size ?? $col_settings->width ?? 100;
-                $html .= '<div class="lz-column lz-col-' . intval($size) . '" data-node="' . esc_attr($col['node_id']) . '" style="width:' . floatval($size) . '%">';
-                $modules = self::filter_nodes_by_type($all_nodes, 'module', $col['node_id']);
-                foreach ($modules as $mod) {
-                    $html .= self::render_module_node($mod);
-                }
-                $html .= '</div>';
+            $col_settings = isset($col['settings']) ? (object) $col['settings'] : new \stdClass();
+            $size = $col_settings->size ?? $col_settings->width ?? 100;
+            $html .= '<div class="lz-column lz-col-' . intval($size) . '" data-node="' . esc_attr($col['node_id']) . '" style="width:' . floatval($size) . '%">';
+            $modules = self::filter_nodes_by_type($all_nodes, 'module', $col['node_id']);
+            foreach ($modules as $mod) {
+                $html .= self::render_module_node($mod);
             }
+            $html .= '</div>';
             $html .= '</div>';
         }
         $html .= '</div>';
