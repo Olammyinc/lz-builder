@@ -171,7 +171,8 @@ function App({
               postToIframe({
                 action: 'lz_append_to_column',
                 column_id: r.data.parent_id,
-                html: r.data.html
+                html: r.data.html,
+                layout: r.data.layout
               });
             } else if (r.data && r.data.layout) {
               updatePreview(r.data.layout);
@@ -263,7 +264,8 @@ function Canvas({
             postToIframe({
               action: 'lz_append_to_column',
               column_id: r.data.parent_id,
-              html: r.data.html
+              html: r.data.html,
+              layout: r.data.layout
             });
           } else if (r.data && r.data.layout) {
             updatePreview(r.data.layout);
@@ -397,7 +399,8 @@ function ModuleList({
           postToIframe({
             action: 'lz_append_to_column',
             column_id: r.data.parent_id,
-            html: r.data.html
+            html: r.data.html,
+            layout: r.data.layout
           });
         } else if (r.data.layout) {
           updatePreview(r.data.layout);

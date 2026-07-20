@@ -11,7 +11,7 @@ export default function Canvas( { data, updatePreview, showNotice, postToIframe,
 			lzFetch( 'add_module', { module: slug } ).then( ( r ) => {
 				if ( r && r.success ) {
 					if ( r.data && r.data.html && r.data.parent_id ) {
-						postToIframe( { action: 'lz_append_to_column', column_id: r.data.parent_id, html: r.data.html } );
+						postToIframe( { action: 'lz_append_to_column', column_id: r.data.parent_id, html: r.data.html, layout: r.data.layout } );
 					} else if ( r.data && r.data.layout ) {
 						updatePreview( r.data.layout );
 					}

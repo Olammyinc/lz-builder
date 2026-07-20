@@ -68,6 +68,10 @@ get_header(); ?>
                     bindModuleClickEvents();
                     bindColumnDropTargets();
                 }
+            } else if (event.data.layout) {
+                contentArea.innerHTML = event.data.layout;
+                bindModuleClickEvents();
+                bindColumnDropTargets();
             }
         }
 

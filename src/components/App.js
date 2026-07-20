@@ -73,9 +73,9 @@ export default function App( { data } ) {
 			if ( event.data.action === 'lz_column_drop' && event.data.module ) {
 				lzFetch( 'add_module', { module: event.data.module, parent_id: event.data.parent_id } ).then( ( r ) => {
 					if ( r && r.success ) {
-						if ( r.data && r.data.html && r.data.parent_id ) {
-							postToIframe( { action: 'lz_append_to_column', column_id: r.data.parent_id, html: r.data.html } );
-						} else if ( r.data && r.data.layout ) {
+				if ( r.data && r.data.html && r.data.parent_id ) {
+						postToIframe( { action: 'lz_append_to_column', column_id: r.data.parent_id, html: r.data.html, layout: r.data.layout } );
+					} else if ( r.data && r.data.layout ) {
 							updatePreview( r.data.layout );
 						}
 						dispatch( { type: 'SET_UNSAVED', value: true } );
