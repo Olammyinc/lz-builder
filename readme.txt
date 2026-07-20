@@ -4,7 +4,7 @@ Tags: page builder, drag and drop, frontend editor, subscription gating, wp ulti
 Requires at least: 5.9
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.7.2
+Stable tag: 1.8.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -46,6 +46,13 @@ Set the `required_plan` property on your module class extending `LZ_Module_Base`
 Templates are `lz_template` custom posts. They appear in the Templates tab inside the builder and can be applied to any page.
 
 == Changelog ==
+
+= 1.8.2 =
+* Fixed admin bar overlap with builder toolbar (admin bar now hidden in builder)
+* Video module now clickable in preview (added click-through overlay)
+* Video aspect ratio moved to CSS classes (was inline)
+* Save drain fix: edits made during an in-flight save are no longer lost
+* Faster editing feedback (auto-save debounce 300ms → 80ms)
 
 = 1.8.0 =
 * Tier 0: Client-side settings model replaces dangerouslySetInnerHTML
