@@ -17,15 +17,10 @@ if ($poster_id > 0) {
     }
 }
 
-$ar_class = 'lz-aspect-' . str_replace(':', '-', $aspect_ratio);
-
-// Build inline container styles for aspect ratio (structural CSS).
-$ratio_map = ['16:9' => '56.25%', '4:3' => '75%', '1:1' => '100%'];
-$pb = $ratio_map[$aspect_ratio] ?? '56.25%';
-$wrap_style = 'position:relative;padding-bottom:' . esc_attr($pb) . ';height:0;overflow:hidden;max-width:100%;';
+$ar_class = 'lz-video-' . str_replace(':', '-', $aspect_ratio);
 ?>
 <div class="lz-video <?php echo esc_attr($node_class); ?> <?php echo esc_attr($ar_class); ?>">
-    <div class="lz-video-wrap" style="<?php echo esc_attr($wrap_style); ?>">
+    <div class="lz-video-wrap">
         <?php if ($video_type === 'embed' && !empty($embed_url)) : ?>
             <?php
             $embed_html = wp_oembed_get($embed_url);

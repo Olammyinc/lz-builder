@@ -583,15 +583,28 @@ function SettingsPanel({
   const inFlightRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(false);
   const flushSave = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(entry => {
     clearTimeout(autoSaveTimerRef.current);
-    if (!entry || !entry.target || inFlightRef.current) return;
+    if (!entry || !entry.target) return;
+    // If a save is in flight, hold this edit; the resolve handler will drain it
+    // immediately after the current request finishes.
+    if (inFlightRef.current) {
+      pendingRef.current = entry;
+      return;
+    }
     inFlightRef.current = true;
+    const drain = () => {
+      inFlightRef.current = false;
+      if (!mountedRef.current) return;
+      if (pendingRef.current) {
+        const next = pendingRef.current;
+        pendingRef.current = null;
+        flushSave(next);
+      }
+    };
     (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('save_settings', {
       node_id: entry.target,
       settings: entry.values
     }).then(r => {
-      inFlightRef.current = false;
-      if (!mountedRef.current) return;
-      if (r && r.success && r.data && r.data.html) {
+      if (mountedRef.current && r && r.success && r.data && r.data.html) {
         dispatch({
           type: 'SET_UNSAVED',
           value: true
@@ -602,9 +615,8 @@ function SettingsPanel({
           html: r.data.html
         });
       }
-    }).catch(() => {
-      inFlightRef.current = false;
-    });
+      drain();
+    }).catch(drain);
     pendingRef.current = null;
   }, [postToIframe, dispatch]);
   const doAutoSave = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(newValues => {
@@ -616,7 +628,7 @@ function SettingsPanel({
     autoSaveTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
       if (pendingRef.current) flushSave(pendingRef.current);
-    }, 300);
+    }, 80);
   }, [nodeId, flushSave]);
   const handleChange = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(change => {
     setValues(prev => {
@@ -664,7 +676,8 @@ function SettingsPanel({
     setLoading(true);
     setSchema(null);
     setFallbackHtml(null);
-    pendingRef.current = null;
+    // Do NOT clear pendingRef on node change — if a save for the previous node is
+    // in flight, the drain handler will flush pendingRef to its correct target.
     (0,_api__WEBPACK_IMPORTED_MODULE_1__.lzFetch)('get_settings_schema', {
       node_id: nodeId
     }).then(r => {

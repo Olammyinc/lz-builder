@@ -62,6 +62,11 @@ final class LZ_Builder {
         if (!self::is_builder_active()) {
             return;
         }
+        add_filter('show_admin_bar', '__return_false');
+        add_filter('body_class', function($classes) {
+            $classes[] = 'lz-builder-active';
+            return $classes;
+        });
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_builder_assets'], 100);
         add_action('wp_head', [__CLASS__, 'render_builder_head']);
     }

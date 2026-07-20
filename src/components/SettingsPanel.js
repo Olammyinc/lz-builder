@@ -22,12 +22,25 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 
 	const flushSave = useCallback( ( entry ) => {
 		clearTimeout( autoSaveTimerRef.current );
-		if ( ! entry || ! entry.target || inFlightRef.current ) return;
+		if ( ! entry || ! entry.target ) return;
+		// If a save is in flight, hold this edit; the resolve handler will drain it
+		// immediately after the current request finishes.
+		if ( inFlightRef.current ) {
+			pendingRef.current = entry;
+			return;
+		}
 		inFlightRef.current = true;
-		lzFetch( 'save_settings', { node_id: entry.target, settings: entry.values } ).then( ( r ) => {
+		const drain = () => {
 			inFlightRef.current = false;
 			if ( ! mountedRef.current ) return;
-			if ( r && r.success && r.data && r.data.html ) {
+			if ( pendingRef.current ) {
+				const next = pendingRef.current;
+				pendingRef.current = null;
+				flushSave( next );
+			}
+		};
+		lzFetch( 'save_settings', { node_id: entry.target, settings: entry.values } ).then( ( r ) => {
+			if ( mountedRef.current && r && r.success && r.data && r.data.html ) {
 				dispatch( { type: 'SET_UNSAVED', value: true } );
 				postToIframe( {
 					action: 'lz_replace_module',
@@ -35,9 +48,8 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 					html: r.data.html,
 				} );
 			}
-		} ).catch( () => {
-			inFlightRef.current = false;
-		} );
+			drain();
+		} ).catch( drain );
 		pendingRef.current = null;
 	}, [ postToIframe, dispatch ] );
 
@@ -47,7 +59,7 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 		autoSaveTimerRef.current = setTimeout( () => {
 			if ( ! mountedRef.current ) return;
 			if ( pendingRef.current ) flushSave( pendingRef.current );
-		}, 300 );
+		}, 80 );
 	}, [ nodeId, flushSave ] );
 
 	const handleChange = useCallback( ( change ) => {
@@ -93,7 +105,8 @@ export default function SettingsPanel( { nodeId, showNotice, postToIframe, dispa
 		setLoading( true );
 		setSchema( null );
 		setFallbackHtml( null );
-		pendingRef.current = null;
+		// Do NOT clear pendingRef on node change — if a save for the previous node is
+		// in flight, the drain handler will flush pendingRef to its correct target.
 		lzFetch( 'get_settings_schema', { node_id: nodeId } ).then( ( r ) => {
 			if ( ! mountedRef.current || fetchId !== fetchIdRef.current ) return;
 			setLoading( false );
