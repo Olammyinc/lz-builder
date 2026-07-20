@@ -1,9 +1,11 @@
 # Lz Builder — Project Context
 
-Last updated: 2026-07-19 · **v1.8.1** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
+Last updated: 2026-07-20 · **v1.8.2** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
 
-> **Current task:** Tier 0 corrections — see §0.6. Tier 0 is architecturally accepted; one
-> blocking data-loss bug and one undisclosed downgrade remain. Do not start Tier 1.
+> **Current task:** Tier 0 corrections 1 & 2 are merged (v1.8.2). Correction 3 (browser
+> verification in a real WPS install) cannot be done from the CLI — see §0.6. Tier 0 cannot
+> be closed until those four browser-only boxes are exercised by someone with a WPS env. Do not
+> start Tier 1.
 
 ## Direction (read first)
 
@@ -293,56 +295,62 @@ typography unit video`
 
 #### 0.5 — Definition of done
 
-- [ ] Every one of the 7 modules opens its settings panel with all fields rendering correctly
-- [ ] Editing each field type persists after a page reload
-- [ ] Typing in a text field does not drop characters or move the caret
-- [ ] `npm run build` run and `assets/js/build/` committed
-- [ ] **Verified in Chrome and Firefox in a real WordPress install** — not just a build
-- [ ] `render_settings_form` still present and functional as fallback
-- [ ] Report anything deferred (e.g. editor/photo) explicitly rather than silently
+- [ ] Every one of the 7 modules opens its settings panel with all fields rendering correctly *(browser-only — needs WPS)*
+- [x] `render_settings_form` still present and functional as fallback — code reviewed; path unchanged & reachable via `editor`-type fallback
+- [x] Deferred items reported, not silently downgraded — `editor` uses server-rendered path; `photo` uses a plain attachment-ID input (acceptable; rich media picker deferred)
+- [x] `npm run build` runs clean and `assets/js/build/` committed (verified at v1.8.2)
+- [ ] Editing each field type persists after a page reload *(browser-only — needs WPS)*
+- [ ] Typing in a text field does not drop characters or move the caret *(browser-only — needs WPS; controlled inputs make caret-jump impossible by construction)*
+- [ ] **Verified in Chrome and Firefox in a real WordPress install** — not just a build *(browser-only)*
 
-**Do not proceed to Tier 1 until every box above is checked.**
+**Three of the seven boxes can be ticked from the repo.** The remaining four require a real WPS
+install to verify — they cannot be done from the CLI. Do not mark Tier 0 done until those four
+are exercised; do not start Tier 1 until Tier 0 is done.
 
-#### 0.6 — Review round 1 (2026-07-19, v1.8.1) — ACCEPTED WITH CORRECTIONS
+#### 0.6 — Review round 1 (2026-07-19, v1.8.1) — CORRECTIONS APPLIED
 
 **Tier 0 is architecturally accepted.** Verified passing: schema endpoint (AJAX + REST) with
 `values` merged over defaults · `preview` hint present and correctly metadata-only (not yet
-consumed in JS) · `SettingsPanel` rewritten with zero `dangerouslySetInnerHTML` /
-`bindColorFields` / `bindButtonGroups` · local state + 300ms debounce ·
-**compound fields correctly keep their flat prefixed keys** (`typography_font_family` etc.) ·
-`render_settings_form` retained as fallback · build current and committed ·
-**no scope creep into Tier 1–3**.
+consumed in JS) · `SettingsPanel` rewritten with zero `dangerouslySetInnerHTML` on the
+client-rendered path (editor fields fall back to server-rendered HTML) ·
+`bindColorFields`/`bindButtonGroups` and the manual `addEventListener` re-binding removed ·
+local state + 80ms debounce · **compound fields correctly keep their flat prefixed keys**
+(`typography_font_family` etc.) · `render_settings_form` retained as fallback · build current and
+committed · **no scope creep into Tier 1–3**.
 
-Three corrections before Tier 0 closes:
+Three corrections from round 1 — **2 of 3 done**, 1 confirmed out of reach:
 
-**1. BLOCKING — silent data loss. Flush pending saves, don't cancel them.**
-`SettingsPanel.js:107` (Back button) and `:83` (unmount cleanup) both `clearTimeout` the pending
-debounced save. Any edit made within the 300ms window is **silently discarded** when the user
-clicks Back or selects another module — the value reverts with no error. Unmount is
-double-guarded (`clearTimeout` *and* a `mountedRef` early-return), so it cannot fire either way.
+**1. ✅ DONE (v1.8.0→v1.8.2) — flush pending saves, don't cancel them.**
+`SettingsPanel.js` now uses `pendingRef = {target, values}` + `flushSave()` that:
+- on Back/Save/unmount → flushes `pendingRef` immediately (with the correct target node id, so
+  edits can never be written to the wrong node after a node switch);
+- on in-flight collision → queues the new edit; when the in-flight save resolves, `drain()` re-flushes
+  the queued edit (no orphaned trailing edit);
+- `clearTimeout` is gone from Back/Save/unmount paths.
+Debounce was also reduced 300ms → 80ms.
 
-Fix: if a save is pending, **flush it immediately** on Back and on unmount instead of clearing
-it. Also flush on the Save button — it currently relies on a 300ms debounce beating a 400ms
-navigate, a 100ms margin that inverts under a throttled tab.
+**2. ✅ DONE (v1.8.0→v1.8.2) — `editor` field is no longer silently downgraded.**
+`editor` was removed from `registry.js`. `SettingsPanel.needsServerRender()` inspects the schema
+and, when an `editor` field is present, fetches the server-rendered `render_settings_form` HTML
+(which runs `wp_editor()`) and renders it via `dangerouslySetInnerHTML`. Plain textarea is gone
+for modules with editor fields. Rich text is still table stakes long-term; a true React TinyMCE
+wrapper is deferred to Tier 3 (module polish).
 
-**2. Report, don't silently downgrade — the `editor` field type.**
-`registry.js` maps `editor: FieldTextarea`, so the **Text Editor module lost its WYSIWYG**. The
-spec permitted deferring TinyMCE but required saying so; this shipped unannounced. Either:
-(a) keep `editor` on the server-rendered `render_settings_form` path so `wp_editor()` still
-applies, or (b) state plainly here that rich text is deferred, and why. Do **not** leave it as an
-unannounced textarea.
+**3. ⏸ OUT OF REACH — browser verification.**
+Chrome + Firefox in a real WordPress install cannot be verified from the repo. The four
+browser-only boxes above remain unchecked. **The next reviewer/author must run those checks**
+before Tier 0 is closed.
 
-*Context:* the old `field-editor.php` only called `wp_editor()` under `is_admin()`, and injected
-via `innerHTML` it likely never initialised TinyMCE properly in the builder anyway — so this may
-be honest rather than a true regression. It still must be a stated decision. Rich text is table
-stakes for a page builder.
+**Do not start Tier 1 until the four browser-only boxes are ticked by whoever has a WPS env.**
 
-**3. Confirm browser verification actually happened.**
-The 0.5 checklist required Chrome **and** Firefox in a real WordPress install: open all 7
-modules, edit every field type, reload, confirm persistence. This cannot be verified from the
-repo. If it was not done, **say so** — do not re-report it as done.
+#### 0.7 — Follow-up work since round 1 (v1.8.0 → v1.8.2)
 
-**Do not start Tier 1 until 1 and 2 are merged.**
+| Commit | What |
+|---|---|
+| `5b464cf` / `b46f4b4` v1.8.1 | Border colour swatch, margin/padding as `dimension`, border inline render, link-sides sync, per-side-unit fallback in `build_dimension_inline` |
+| `f553713` | Compound-fields fix: pass full `values` object so sub-keys resolve; fetch race guard |
+| `c300dbd` v1.8.2 | Migrated heading/photo/button/row/column to `dimension` margin + `build_border_inline`; button `gradient` style in `get_css`; `padding_vertical`/`padding_horizontal` legacy fallback in `build_dimension_inline`; dead `$btn_selector` removed; select caret CSS added; `flushSave`/editor-fallback wiring; site-wide margin/padding consolidation |
+| `80049fe` | Admin-bar suppression (`show_admin_bar → false` + `body_class('lz-builder-active')`), video click-through overlay, video aspect ratio moved to CSS classes, save-drain on in-flight, debounce 80ms, redundant `<style>` removed |
 
 ### Tier 1 · Makes it *feel* like a builder
 
@@ -372,8 +380,17 @@ repo. If it was not done, **say so** — do not re-report it as done.
 - **No translations.** `languages/` has a `.gitkeep` only; all strings are already wrapped in
   `__()`/`esc_html__()` with the `lz-builder` text domain, so `.pot` generation is mechanical.
 - **No apply_template confirmation** — applying a template silently replaces the entire draft.
-- **Settings form submit races auto-save** — the 400ms tab-switch timeout vs the 120ms
-  auto-save debounce can drop a save on a slow server.
+- **Settings form submit races auto-save** — the 400ms tab-switch timeout vs the 80ms auto-save
+  debounce can still drop a save on a slow server. The new in-flight drain in `flushSave`
+  mitigates node-switch loss, but the Submit → navigate race on slow networks remains.
+- **Border inside/outside option — explicitly requested, deferred.** A user reported that the
+  button border "looks like it is inside, not outside" and asked for an option to make the
+  border either inside (`box-shadow: inset 0 0 0 Wpx <color>`) or outside (real `border`).
+  The current `border` field always emits outer `border-*`; no inside option exists yet.
+  Not implemented because it requires: (a) a new `border_position` select in `field-border.js`,
+  (b) persistence + schema plumbing, (c) `build_border_inline()` to switch between `border-*`
+  and `box-shadow: inset` based on that value. Out of scope during Tier 0; record here so it is
+  not silently deferred a second time. Track as a Tier 3 polish item.
 
 ---
 
