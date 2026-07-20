@@ -52,14 +52,17 @@ get_header(); ?>
         if (!event.data || !event.data.action) return;
 
         if (event.data.action === 'lz_render_layout' && contentArea && event.data.html) {
+            console.log('[lz preview] lz_render_layout — setting innerHTML, length:', event.data.html.length);
             contentArea.innerHTML = event.data.html;
             bindModuleClickEvents();
             bindColumnDropTargets();
         }
 
         if (event.data.action === 'lz_append_to_column' && event.data.column_id && event.data.html) {
+            console.log('[lz preview] lz_append_to_column — column_id:', event.data.column_id, 'html length:', event.data.html.length, 'has layout:', !!event.data.layout);
             var col = contentArea.querySelector('[data-node="' + event.data.column_id + '"]');
             if (col) {
+                console.log('[lz preview] column found — appending module');
                 var wrapper = document.createElement('div');
                 wrapper.innerHTML = event.data.html.trim();
                 var newEl = wrapper.firstChild;
@@ -69,9 +72,12 @@ get_header(); ?>
                     bindColumnDropTargets();
                 }
             } else if (event.data.layout) {
+                console.log('[lz preview] column NOT found — falling back to full layout render, layout length:', event.data.layout.length);
                 contentArea.innerHTML = event.data.layout;
                 bindModuleClickEvents();
                 bindColumnDropTargets();
+            } else {
+                console.error('[lz preview] column NOT found AND no layout fallback — module dropped silently!');
             }
         }
 

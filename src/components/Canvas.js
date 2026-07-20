@@ -9,6 +9,7 @@ export default function Canvas( { data, updatePreview, showNotice, postToIframe,
 		const slug = e.dataTransfer.getData( 'text/plain' );
 		if ( slug ) {
 			lzFetch( 'add_module', { module: slug } ).then( ( r ) => {
+				console.log( '[lz parent] (drop) add_module — success:', r && r.success, 'html:', !!( r && r.data && r.data.html ), 'parent_id:', r && r.data && r.data.parent_id, 'layout:', !!( r && r.data && r.data.layout ) );
 				if ( r && r.success ) {
 					if ( r.data && r.data.html && r.data.parent_id ) {
 						postToIframe( { action: 'lz_append_to_column', column_id: r.data.parent_id, html: r.data.html, layout: r.data.layout } );

@@ -2,10 +2,17 @@
 
 Last updated: 2026-07-20 · **v1.8.2** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
 
-> **Current task:** Tier 0 corrections 1 & 2 are merged (v1.8.2). Correction 3 (browser
-> verification in a real WPS install) cannot be done from the CLI — see §0.6. Tier 0 cannot
-> be closed until those four browser-only boxes are exercised by someone with a WPS env. Do not
-> start Tier 1.
+> **Current tasks — user reported live regressions 2026-07-20.** Do in order:
+> 1. **BLOCKING — add-module UI failure (§X1).** Clicking a sidebar module on an empty page
+>    does not add anything visible to the canvas. Drag also shows only the central "Drop module
+>    here" overlay with no in-canvas placement indicator. Commits `01b8c8a` and `04e0bb8`
+>    attempted to fix this and did not.
+> 2. **Elementor-style placement UX (§X2).** Per-column drops exist but the UX is not
+>    competitive with Elementor/Beaver Builder. This was previously assumed part of Tier 2;
+>    the user reports it is blocking, so it moves ahead.
+> 3. Tier 0 correction 3 (browser verification in a real WordPress install) — folded into §X1
+>    verification.
+> **Do not start Tier 1 (live preview, node toolbars, undo/redo) until both above are green.**
 
 ## Direction (read first)
 
@@ -204,7 +211,126 @@ costs far less than a wrong implementation that has to be unwound.
 first-party builder good enough to carry Lz Funnels on a WaaS product. Work strictly in tier
 order; each tier is a separate task with its own verification.
 
-### Tier 0 · The enabler — client-side settings model  ← **THE ONLY CURRENT TASK**
+### §X1 · BLOCKING — add-module UI regression (user-reported 2026-07-20) ← **CURRENT TASK #1**
+
+**Symptom (from user, with screenshot):**
+- Click a module in the sidebar → **nothing visible happens in the canvas**.
+- Drag a module onto the canvas → only the central "Drop module here" overlay is shown, and
+  when released the module does not appear in the canvas either.
+
+Two prior commits (`01b8c8a`, `04e0bb8`) attempted to fix this. They did not.
+
+**Suspected cause (code review — needs browser confirmation, do not assume):**
+The failure sits in the parent→iframe append protocol when the iframe is showing native theme
+content (e.g. Astra rendering `the_content()` on a page that has no draft yet):
+- Server auto-creates a row/column/module correctly and returns `parent_id` + `html` + `layout`.
+- Client posts `lz_append_to_column` with the new `column_id`.
+- Iframe does `contentArea.querySelector('[data-node="<column_id>"]')` — **returns `null`
+  because that column was just created and does not yet exist in the iframe DOM.**
+- The fallback added in `04e0bb8` replaces `contentArea.innerHTML` with `event.data.layout` —
+  something in that path is failing silently. Candidates to investigate in this order:
+  1. `get_layout_html_safe($post_id)` returns empty when there is a published post but no draft.
+     Print/log the returned string.
+  2. After the `innerHTML = layout` fallback, `bindColumnDropTargets()` and `bindModuleClickEvents()`
+     ARE called (`builder-preview.php:73-74`) — check that the replaced HTML actually contains
+     `.lz-column` elements with `data-node` attributes.
+  3. The `refreshLayout()` fired from the client dispatches a second AJAX right after; if it
+     resolves *before* the iframe append, it may be mutating state the append relies on.
+
+**What NOT to do:**
+- Do NOT add a third "fix attempt" layer of retries/fallbacks/reloads. The problem is not that
+  the code is missing a fallback — two fallbacks exist. It is that one of them is failing
+  silently. **Reproduce, log, diagnose, then fix the actual failing line.** Adding a full-page
+  iframe reload as the fallback is not acceptable — that will lose scroll position and drag
+  state.
+- Do NOT rebuild the whole append/drop pipeline. The mechanism is close to correct.
+- Do NOT touch the settings model, sanitisation, or any Tier 0 work. This is a preview-sync bug.
+
+**Definition of done:**
+- [ ] Fresh WordPress install, page with published content but no draft, click Heading in sidebar
+      → heading appears in the iframe within 500 ms.
+- [ ] Same setup, drag Heading onto the canvas → heading appears in the iframe.
+- [ ] Same setup, click Heading a second time → *second* heading appears below the first, in
+      the same column.
+- [ ] Refresh the browser → both headings are still there.
+- [ ] Verified in Chrome **and** Firefox.
+- [ ] Reproducer + fix are described in the commit message (what was actually failing, not just
+      what was changed).
+
+---
+
+### §X2 · Elementor-style placement UX ← **CURRENT TASK #2**
+
+**Scope correction:** the user calls this "leftover Tier 0." It is not — Tier 0 was the
+client-side settings model. Per-column drops (built in `030c063`) *are* wired, but their UX is
+not competitive with Elementor/Beaver Builder and the user has judged this blocking. It moves
+ahead of the rest of the roadmap.
+
+**What Elementor/Beaver Builder do that Lz Builder does not:**
+1. As you drag a module near the canvas, a **thin blue line drop indicator** appears between
+   the two sibling elements where the module will land — updating in real time as the cursor
+   moves.
+2. Drop zones exist **between modules**, not only inside columns. You can insert a module
+   *between* two existing modules in the same column.
+3. Drop zones exist **above and below rows** for inserting a new row at that position.
+4. On an empty canvas, a large, clearly-labelled "Drop here to create your first row" target
+   appears — not a central overlay competing with the iframe.
+
+**Current state (verified in code):**
+- `builder-preview.php:93-128` binds `dragover`/`drop` to every `.lz-column` with a
+  `.lz-column-drop--active` class toggle. Working but visually invisible.
+- `Canvas.js:44-56` renders a single large `.lz-drop-zone` in the *parent* frame that overlays
+  the iframe with "Drop module here" — this is what the user sees and it competes with the
+  per-column indicators inside the iframe.
+- No between-siblings drop zones. No above/below-row drop zones. No "empty state" first-row CTA.
+
+**What to build (in this order):**
+
+**A. Retire the central overlay.** Remove Canvas.js's `.lz-drop-zone` overlay entirely. The
+per-column indicators inside the iframe are the correct UI; the central overlay is confusing
+noise. Keep `pointer-events: none` on the iframe while dragging (that part is correct).
+
+**B. Make the per-column indicator visible.** `.lz-column-drop--active` currently just toggles a
+class. It should render a clearly visible **blue horizontal bar** at the bottom of the target
+column (where the module will land), not tint the whole column. Standard is a 3px bar plus a
+subtle column-wide background wash at ~10% opacity.
+
+**C. Between-siblings drop zones.** In `builder-preview.php`, before binding column drops, also
+insert a **1px-tall invisible drop target** *between* each pair of sibling elements inside every
+column (and one at the top, one at the bottom). On `dragover` on one of these, expand it to a
+3px blue bar and treat drop as `add_module` with `parent_id = column_id` and
+`position = <index between siblings>`. The `add_module` endpoint already accepts `position`; it
+does not need to change.
+
+**D. Above/below-row drop zones.** Same pattern between rows, but a drop there means "create a
+new 1-col row at this position, then add the module into it." Add a new AJAX action
+`add_row_with_module` (or extend `add_module` with a `position_between_rows` flag). Keep the
+existing `add_row` endpoint — do not remove it.
+
+**E. Empty-state first-row target.** When `state.layout` is `[]`, render a single large dashed
+box inside the iframe (not in the parent) that says "Drop a module here to get started." On
+drop, server auto-creates a 1-col row (same as today) and the module goes inside.
+
+**What NOT to do:**
+- Do NOT introduce a drag-and-drop library (react-dnd, dnd-kit, Sortable.js). Native HTML5 DnD
+  is already working; a library would be pure churn.
+- Do NOT redesign the row/column data model. Positions and parent_ids already support all of
+  this.
+- Do NOT combine §X1 and §X2 into one commit. §X1 first, ship it, verify it. Then §X2.
+- Do NOT implement column-to-column module moves in this task. That's Tier 2 (drag-to-reorder).
+  §X2 is only about **placement of new modules from the sidebar.**
+
+**Definition of done:**
+- [ ] Dragging a module shows a clear blue-line indicator that moves as the cursor moves.
+- [ ] Can drop a module between two existing modules in a column and it lands between them.
+- [ ] Can drop above/below any row to create a new row with that module in it.
+- [ ] Empty canvas shows a single first-row CTA (not a central overlay).
+- [ ] Old Canvas.js central overlay is removed.
+- [ ] Verified in Chrome **and** Firefox with at least 3 rows and mixed column layouts.
+
+---
+
+### Tier 0 · The enabler — client-side settings model  ← **DONE (v1.8.2, verified 2026-07-19)**
 
 **Goal:** the server sends a module's settings form as **JSON schema + current values**; React
 renders the fields from a component registry. This removes the `dangerouslySetInnerHTML` blob and
