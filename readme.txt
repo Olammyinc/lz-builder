@@ -4,7 +4,7 @@ Tags: page builder, drag and drop, frontend editor, subscription gating, wp ulti
 Requires at least: 5.9
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.8.2
+Stable tag: 1.8.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -46,6 +46,11 @@ Set the `required_plan` property on your module class extending `LZ_Module_Base`
 Templates are `lz_template` custom posts. They appear in the Templates tab inside the builder and can be applied to any page.
 
 == Changelog ==
+
+= 1.8.3 =
+* Fixed modules invisible on pages with old-published data (find_last_column/render_row alignment)
+* Fixed first-module-add silently failing on fresh pages (append-to-column fallback)
+* Fixed PHP fatal syntax error (stray closing brace in add_module)
 
 = 1.8.2 =
 * Fixed admin bar overlap with builder toolbar (admin bar now hidden in builder)

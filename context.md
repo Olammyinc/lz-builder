@@ -1,6 +1,6 @@
 # Lz Builder — Project Context
 
-Last updated: 2026-07-20 · **v1.8.2** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
+Last updated: 2026-07-20 · **v1.8.3** · repo: `github.com/Olammyinc/lz-builder` (branch `main`)
 
 > **Current tasks — user reported live regressions 2026-07-20.** Do in order:
 > 1. **BLOCKING — add-module UI failure (§X1).** Clicking a sidebar module on an empty page

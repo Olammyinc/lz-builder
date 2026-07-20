@@ -3,7 +3,7 @@
  * Plugin Name: Lz Builder
  * Plugin URI: https://lzplugins.com
  * Description: A powerful frontend drag-and-drop page builder with subscription-based module gating.
- * Version: 1.8.2
+ * Version: 1.8.3
  * Author: Ibrahim Olammy
  * Text Domain: lz-builder
  * Domain Path: /languages
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('LZ_BUILDER_VERSION', '1.8.2');
+define('LZ_BUILDER_VERSION', '1.8.3');
 define('LZ_BUILDER_FILE', __FILE__);
 define('LZ_BUILDER_DIR', plugin_dir_path(__FILE__));
 define('LZ_BUILDER_URL', plugin_dir_url(__FILE__));
