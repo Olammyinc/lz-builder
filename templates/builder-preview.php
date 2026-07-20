@@ -70,6 +70,9 @@ get_header(); ?>
                     col.appendChild(newEl);
                     bindModuleClickEvents();
                     bindColumnDropTargets();
+                    var appCs = window.getComputedStyle(newEl);
+                    console.log('[lz preview] appended module — tag:', newEl.tagName, 'display:', appCs.display, 'height:', appCs.height, 'rect top:', newEl.getBoundingClientRect().top, 'visible:', appCs.visibility);
+                    console.log('[lz preview] parent column — innerHTML length:', col.innerHTML.length, 'height:', window.getComputedStyle(col).height, 'rect top:', col.getBoundingClientRect().top);
                 }
             } else if (event.data.layout) {
                 console.log('[lz preview] column NOT found — falling back to full layout render, layout length:', event.data.layout.length);
