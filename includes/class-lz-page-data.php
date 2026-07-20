@@ -375,7 +375,6 @@ class LZ_Page_Data {
                 }
             }
         }
-    }
 
         $node_id = self::generate_node_id();
         $defaults = self::get_module_default_settings($module_slug);
