@@ -179,6 +179,10 @@ class LZ_AJAX_Handlers {
             wp_send_json_error(['message' => $node_id->get_error_message()]);
         }
 
+        // Re-resolve parent_id after save (add_module may have auto-created a row/column).
+        $saved_node = LZ_Page_Data::get_node($node_id, $post_id, 'draft');
+        $parent_id  = $saved_node->parent_id ?? $parent_id;
+
         // Render just the new module — fast, single-node render.
         $rendered_html = '';
         $render_error  = '';

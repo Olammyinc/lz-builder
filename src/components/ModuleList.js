@@ -54,7 +54,7 @@ export default function ModuleList( { modules, lockedModules, showNotice, update
 				);
 			}
 		} );
-	}, [ showNotice, updatePreview, dispatch, refreshLayout ] );
+	}, [ showNotice, updatePreview, postToIframe, dispatch, refreshLayout ] );
 
 	const handleDragStart = useCallback( ( e, slug ) => {
 		e.dataTransfer.setData( 'text/plain', slug );

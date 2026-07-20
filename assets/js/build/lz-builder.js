@@ -412,7 +412,7 @@ function ModuleList({
         showNotice(r && r.data && r.data.message || 'Could not add module.', 'error');
       }
     });
-  }, [showNotice, updatePreview, dispatch, refreshLayout]);
+  }, [showNotice, updatePreview, postToIframe, dispatch, refreshLayout]);
   const handleDragStart = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)((e, slug) => {
     e.dataTransfer.setData('text/plain', slug);
     e.dataTransfer.effectAllowed = 'copy';
